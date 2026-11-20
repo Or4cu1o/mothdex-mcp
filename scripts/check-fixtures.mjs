@@ -16,7 +16,12 @@ async function getJson(url, token) {
     "user-agent": "mothdex-mcp-fixture-check",
   };
   if (token) headers.authorization = `Bearer ${token}`;
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  // redirect: "error" so the Authorization header can never follow a redirect.
+  const res = await fetch(url, {
+    headers,
+    redirect: "error",
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`GET ${url} answered HTTP ${res.status}`);
   return res.json();
 }
@@ -31,7 +36,10 @@ async function getText(url) {
 }
 
 async function readLocal() {
-  const names = (await readdir(LOCAL_DIR)).filter((name) => SAFE_NAME.test(name));
+  const all = await readdir(LOCAL_DIR);
+  const unsafe = all.filter((name) => !SAFE_NAME.test(name));
+  if (unsafe.length > 0) throw new Error(`unexpected local file names: ${unsafe.join(", ")}`);
+  const names = all;
   return new Map(
     await Promise.all(
       names.map(async (name) => [name, await readFile(new URL(name, LOCAL_DIR), "utf8")]),
