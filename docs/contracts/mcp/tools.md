@@ -27,7 +27,9 @@ Plugin packaging (`.claude-plugin/`, `.mcp.json`, `.mcpb`, `server.json`) is **p
 
 A tool failure returns `isError: true` with `structuredContent: {error: {code, message, retryable, retry_after_s?}}`,
 where `code` comes from [`cli-output.md`](https://github.com/Or4cu1o/mothdex-cli/blob/main/docs/contracts/cli/cli-output.md) (mothdex-cli) §4 (`not_found`, `invalid_request`, `rate_limited`, `network`, `upstream`,
-`api_incompatible`). Input validation failures are `invalid_request` and never reach the API.
+`api_incompatible`, `untrusted_redirect`). Input validation failures are `invalid_request` and never reach the API.
+A redirect the client refuses (another origin, a scheme change or more than 3 hops; api-client §5.1) is
+`untrusted_redirect` with `retryable: false`, never `network`.
 
 ### Shared input fragments
 
