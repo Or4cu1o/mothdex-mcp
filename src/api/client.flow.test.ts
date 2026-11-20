@@ -146,12 +146,38 @@ describe("transport rules", () => {
       "https://api.mothdex.net/v1/info",
       "https://api.mothdex.net/v1/info2",
     ]);
-    const cross = makeClient([{ status: 302, headers: { location: "https://evil.test/x" } }], {
-      maxRetries: 0,
-    });
-    const error = await fail(cross.client.info());
-    expect(isMothdexError(error) && error.kind).toBe("network");
-    expect(cross.seen).toHaveLength(1);
+  });
+
+  it.each([
+    ["another host", "https://evil.test/x"],
+    ["https to http", "http://api.mothdex.net/v1/info"],
+    ["another port", "https://api.mothdex.net:8443/v1/info"],
+  ])(
+    "refuses a redirect to %s with one fetch, untrusted_redirect and no retry",
+    async (_name, location) => {
+      const { client, seen, clock } = makeClient([{ status: 302, headers: { location } }]);
+      const error = await fail(client.info());
+      expect(isMothdexError(error) && error.kind).toBe("untrusted_redirect");
+      expect(isMothdexError(error) && error.detail).toMatch(/^redirect to [^/]+ refused$/);
+      expect(seen).toHaveLength(1);
+      expect(clock.sleeps).toEqual([]);
+    },
+  );
+
+  it("refuses the 4th hop with one fetch per hop and no retry", async () => {
+    const hop = { status: 307, headers: { location: "/v1/next" } };
+    const { client, seen } = makeClient([hop]);
+    const error = await fail(client.info());
+    expect(isMothdexError(error) && error.kind).toBe("untrusted_redirect");
+    expect(seen).toHaveLength(4);
+  });
+
+  it("does not count a refused redirect toward the 429 circuit", async () => {
+    const { client, seen } = makeClient([
+      { status: 302, headers: { location: "https://evil.test/" } },
+    ]);
+    for (let i = 0; i < 4; i++) await fail(client.info());
+    expect(seen).toHaveLength(4); // never the "cooldown active" fast-fail
   });
 
   it("drops content-type when a redirect turns the POST into a GET", async () => {

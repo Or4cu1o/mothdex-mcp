@@ -52,20 +52,18 @@ async function readCapped(op: string, response: Response): Promise<string> {
 }
 
 /** Where a redirect goes, or undefined when it is not followable (other host or scheme). */
-function sameOriginTarget(from: URL, location: string | null): URL | undefined {
+function resolveTarget(from: URL, location: string | null): URL | undefined {
   if (location === null) return undefined;
-  let target: URL;
   try {
-    target = new URL(location, from);
+    return new URL(location, from);
   } catch {
     return undefined;
   }
-  return target.origin === from.origin ? target : undefined;
 }
 
 /**
  * One HTTP exchange. Redirects are followed by hand, at most three and only inside the same
- * origin, as in the Go client. 301/302/303 turn into a body-less GET; 307/308 keep the request.
+ * origin (scheme, host and port); anything else is "untrusted_redirect", as in the Go client. 301/302/303 turn into a body-less GET; 307/308 keep the request.
  */
 export async function exchange(fetchFn: FetchFn, request: RawRequest): Promise<RawResponse> {
   let { method, url, payload, headers } = request;
@@ -87,13 +85,14 @@ export async function exchange(fetchFn: FetchFn, request: RawRequest): Promise<R
       };
     }
     await response.body?.cancel();
-    const target = sameOriginTarget(first, response.headers.get("location"));
-    if (hops >= MAX_REDIRECTS || target === undefined) {
+    const target = resolveTarget(first, response.headers.get("location"));
+    if (hops >= MAX_REDIRECTS || target === undefined || target.origin !== first.origin) {
+      // Not retried and not a 429: kind "untrusted_redirect" is outside the retry rule.
       throw new MothdexError({
-        kind: "network",
+        kind: "untrusted_redirect",
         op: request.op,
         httpStatus: response.status,
-        detail: "redirect refused",
+        detail: `redirect to ${target?.host ?? "an unparsable target"} refused`,
       });
     }
     url = target;
