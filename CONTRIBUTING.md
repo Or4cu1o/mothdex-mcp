@@ -1,0 +1,53 @@
+# Contributing
+
+Thanks for helping. The project is pre-alpha; open an issue before starting
+anything large.
+
+## Branches and commits
+
+- Branch from `main` as `type/short-name` (for example `fix/limit-validation`).
+- Commits follow [Conventional Commits](https://www.conventionalcommits.org/):
+  `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`,
+  `chore`, `revert`, with an optional scope (`fix(client): ...`).
+- Never push directly to `main` and never force-push shared branches. Changes
+  land through pull requests.
+- One commit per complete unit of work.
+
+## Pull requests
+
+- Add an entry under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) in the same PR.
+- Update `README.md` if structure or behavior changes.
+- CI must be green. Do not commit secrets, tokens or `.env` files.
+
+## Local checks
+
+Install Node (see `.node-version`) and pnpm (version in `package.json`, for
+example through `corepack enable`), then run:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+gitleaks git --pre-commit --staged --redact
+```
+
+Node baseline: `engines.node` is `>=24` and the bundle targets `node24` because
+Node 24 and 26 are the LTS lines this project builds and tests against
+(`.node-version` and CI use 26). It is a deliberate floor for the skeleton and
+will be revisited against the MCP SDK's minimum version when the SDK is added.
+
+Use `pnpm format` to apply Biome fixes. Use the lockfile manager only: do not
+use npm or yarn, and check license and maintenance before adding a dependency.
+
+## Tests
+
+Test behavior that matters: security-sensitive paths, file writes, contracts
+with the API (against fixtures), and pure decision rules. Add one regression
+test per bug. Do not add snapshot tests or tests that depend on the real clock
+or on `sleep`. Tests never call the real API.
+
+## License
+
+By contributing you agree that your contributions are licensed under GPL-3.0.

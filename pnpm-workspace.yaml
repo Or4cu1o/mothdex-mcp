@@ -1,0 +1,7 @@
+engineStrict: true
+strictDepBuilds: true
+minimumReleaseAge: 10080
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+allowBuilds:
+  esbuild: false
