@@ -1,0 +1,17 @@
+# Build output (committing dist is decided in T-34)
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+*.mcpb
+
+# Local state and configuration
+.env
+.env.*
+!.env.example
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
