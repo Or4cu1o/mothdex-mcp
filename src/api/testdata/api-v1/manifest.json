@@ -1,0 +1,106 @@
+{
+  "recorded_at": "2026-11-20T19:54:18Z",
+  "retry_after_seen": false,
+  "retry_after_note": "Retry-After did not appear on any recorded response. No 429 was provoked on purpose, so its presence on a 429 is not verified.",
+  "rate_limit_headers_seen": [],
+  "fixtures": [
+    {
+      "file": "info.json",
+      "method": "GET",
+      "path": "/info",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      }
+    },
+    {
+      "file": "platforms.json",
+      "method": "GET",
+      "path": "/platforms",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      }
+    },
+    {
+      "file": "regions.json",
+      "method": "GET",
+      "path": "/regions",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      }
+    },
+    {
+      "file": "search.json",
+      "method": "POST",
+      "path": "/search",
+      "request_body": "{\"search_key\":\"doom\",\"platforms\":[\"dos\"],\"max_results\":3}",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      }
+    },
+    {
+      "file": "search-empty.json",
+      "method": "POST",
+      "path": "/search",
+      "request_body": "{\"search_key\":\"zzzqqq-no-such-title-xyz\",\"max_results\":3}",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      }
+    },
+    {
+      "file": "entry.json",
+      "method": "POST",
+      "path": "/entry",
+      "request_body": "{\"slug\":\"doom-1993-dos\"}",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      }
+    },
+    {
+      "file": "entry-not-found.json",
+      "method": "POST",
+      "path": "/entry",
+      "request_body": "{\"slug\":\"this-slug-does-not-exist\"}",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      }
+    },
+    {
+      "file": "random.json",
+      "method": "POST",
+      "path": "/entry/random",
+      "request_body": "{\"platforms\":[\"gba\"]}",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      }
+    },
+    {
+      "file": "entry-empty-slug.json",
+      "method": "POST",
+      "path": "/entry",
+      "request_body": "{\"slug\":\"\"}",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      }
+    },
+    {
+      "file": "search-bad-json.json",
+      "method": "POST",
+      "path": "/search",
+      "request_body": "{",
+      "status": 400,
+      "headers": {
+        "content-type": "application/json"
+      }
+    }
+  ],
+  "requests_performed": 10
+}
