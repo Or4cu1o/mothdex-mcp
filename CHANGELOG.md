@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Design documentation in `docs/`: contracts for the MCP tools, resources and prompts (SDK v2) and for the
+  Claude Code plugin packaging; a copy of ADR-0001 (stack); research notes on the plugin spec and the MCP SDK.
 - Project skeleton: pnpm, strict TypeScript, Biome, Vitest, esbuild bundle to
   `dist/mothdex-mcp.mjs`, minimal entry point that prints its version.
 - GPL-3.0 license, governance documents, issue and pull request templates.
