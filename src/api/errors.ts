@@ -8,7 +8,9 @@ export type ErrorKind =
   | "decode"
   | "api_incompatible"
   | "rate_limited"
-  | "canceled";
+  | "canceled"
+  /** A redirect the client refused (other origin, scheme change, more than 3 hops). Never retried. */
+  | "untrusted_redirect";
 
 export interface ErrorInit {
   readonly kind: ErrorKind;

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A redirect the API client refuses (another origin, a scheme or port change, more than 3 hops) is now the
+  non-retryable error kind `untrusted_redirect` instead of `network`; the message names only the target host.
+
 ### Added
 
 - TypeScript client for the Mothdex API v1 in `src/api/` (search, entry, random, platforms, regions, info), with the

@@ -146,12 +146,60 @@ describe("transport rules", () => {
       "https://api.mothdex.net/v1/info",
       "https://api.mothdex.net/v1/info2",
     ]);
-    const cross = makeClient([{ status: 302, headers: { location: "https://evil.test/x" } }], {
-      maxRetries: 0,
-    });
-    const error = await fail(cross.client.info());
-    expect(isMothdexError(error) && error.kind).toBe("network");
-    expect(cross.seen).toHaveLength(1);
+  });
+
+  it.each([
+    ["another host", "https://evil.test/x"],
+    ["https to http", "http://api.mothdex.net/v1/info"],
+    ["another port", "https://api.mothdex.net:8443/v1/info"],
+  ])(
+    "refuses a redirect to %s with one fetch, untrusted_redirect and no retry",
+    async (_name, location) => {
+      const { client, seen, clock } = makeClient([{ status: 302, headers: { location } }]);
+      const error = await fail(client.info());
+      expect(isMothdexError(error) && error.kind).toBe("untrusted_redirect");
+      expect(isMothdexError(error) && error.detail).toMatch(/^redirect to [^/]+ refused$/);
+      expect(seen).toHaveLength(1);
+      expect(clock.sleeps).toEqual([]);
+    },
+  );
+
+  it("resolves a relative Location against the current URL, not the first", async () => {
+    const { client, seen } = makeClient([
+      { status: 307, headers: { location: "/v1/a/b" } },
+      { status: 307, headers: { location: "c" } },
+      ok("info.json"),
+    ]);
+    await client.info();
+    expect(seen.map((s) => s.url).at(-1)).toBe("https://api.mothdex.net/v1/a/c");
+  });
+
+  it("refuses a 3xx without Location with its own message", async () => {
+    const { client } = makeClient([{ status: 302 }]);
+    const error = await fail(client.info());
+    expect(isMothdexError(error) && [error.kind, error.detail]).toEqual([
+      "untrusted_redirect",
+      "redirect without a usable target",
+    ]);
+  });
+
+  it("refuses the 4th hop with one fetch per hop and no retry", async () => {
+    const hop = { status: 307, headers: { location: "/v1/next" } };
+    const { client, seen } = makeClient([hop]);
+    const error = await fail(client.info());
+    expect(isMothdexError(error) && [error.kind, error.detail]).toEqual([
+      "untrusted_redirect",
+      "too many redirects",
+    ]);
+    expect(seen).toHaveLength(4);
+  });
+
+  it("does not count a refused redirect toward the 429 circuit", async () => {
+    const { client, seen } = makeClient([
+      { status: 302, headers: { location: "https://evil.test/" } },
+    ]);
+    for (let i = 0; i < 4; i++) await fail(client.info());
+    expect(seen).toHaveLength(4); // never the "cooldown active" fast-fail
   });
 
   it("drops content-type when a redirect turns the POST into a GET", async () => {
