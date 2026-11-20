@@ -31,6 +31,10 @@ pnpm build
 node dist/mothdex-mcp.mjs
 ```
 
+`src/api/` holds the API v1 client. Its test fixtures are a copy of the ones in
+[mothdex-cli](https://github.com/Or4cu1o/mothdex-cli); `pnpm check:fixtures` (and CI) fails when they diverge, and
+`node scripts/check-fixtures.mjs --update` refreshes the copy.
+
 ## Contributing and security
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).

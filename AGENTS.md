@@ -23,6 +23,7 @@ pnpm format                                     # biome check --write
 pnpm typecheck                                  # tsc --noEmit
 pnpm test                                       # vitest
 pnpm build                                      # esbuild -> dist/mothdex-mcp.mjs
+pnpm check:fixtures                             # src/api/testdata copy vs mothdex-cli main (network)
 node dist/mothdex-mcp.mjs                       # run (prints version)
 pnpm audit --audit-level high                      # known vulnerabilities (all deps, incl. toolchain)
 gitleaks git --pre-commit --staged --redact     # secrets scan before every commit
