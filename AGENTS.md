@@ -6,8 +6,13 @@ Guidance for humans and coding agents working in this repository.
 
 `mothdex-mcp`: MCP server (TypeScript, stdio) for the Mothdex API v1. Status:
 pre-alpha skeleton. The MCP SDK is not a dependency yet. Plugin packaging
-(`.claude-plugin/`, `.mcp.json`, `skills/`, `commands/`) is not part of the
-skeleton.
+(`.claude-plugin/`, `.mcp.json`, `skills/`) is not part of the skeleton.
+
+Node baseline: `engines.node >=24` and the esbuild target `node24` are a
+provisional skeleton default (Node 24 and 26 are LTS lines at the time of
+writing; `.node-version` and CI use 26). Revisit in T-31 against the MCP SDK's
+minimum Node version; `@types/node` 26 can expose APIs missing on Node 24, so
+keep the minimum and the types aligned when it changes.
 
 ## Commands
 
