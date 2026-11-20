@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- TypeScript client for the Mothdex API v1 in `src/api/` (search, entry, random, platforms, regions, info), with the
+  same rules as the Go client in mothdex-cli: envelope check with `info.error` on HTTP 200, error kinds, a token
+  bucket at 5 req/s, a 429 breach circuit held in memory, bounded retries, `Cc`/`Cf` stripped from server messages,
+  https only. No runtime dependencies.
+- Copy of the mothdex-cli API fixtures in `src/api/testdata/api-v1/` and a `fixtures` CI job
+  (`scripts/check-fixtures.mjs`, `pnpm check:fixtures`) that fails when the copy diverges from mothdex-cli `main`;
+  `--update` refreshes the copy.
 - Design documentation in `docs/`: contracts for the MCP tools, resources and prompts (SDK v2) and for the
   Claude Code plugin packaging; a copy of ADR-0001 (stack); research notes on the plugin spec and the MCP SDK.
 - Project skeleton: pnpm, strict TypeScript, Biome, Vitest, esbuild bundle to

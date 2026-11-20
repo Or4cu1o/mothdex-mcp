@@ -48,6 +48,13 @@ with the API (against fixtures), and pure decision rules. Add one regression
 test per bug. Do not add snapshot tests or tests that depend on the real clock
 or on `sleep`. Tests never call the real API.
 
+## API fixtures
+
+`src/api/testdata/api-v1/` is a copy of the fixtures owned by mothdex-cli. The `fixtures` CI job compares it with
+mothdex-cli `main`, so a fixture change there turns every pull request here red until
+`node scripts/check-fixtures.mjs --update` is run and the result is committed. That is the intended drift signal.
+The job depends on the GitHub API, so keep it out of the required checks.
+
 ## License
 
 By contributing you agree that your contributions are licensed under GPL-3.0.
