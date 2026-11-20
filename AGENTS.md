@@ -24,7 +24,7 @@ pnpm typecheck                                  # tsc --noEmit
 pnpm test                                       # vitest
 pnpm build                                      # esbuild -> dist/mothdex-mcp.mjs
 node dist/mothdex-mcp.mjs                       # run (prints version)
-pnpm audit --prod                               # known vulnerabilities
+pnpm audit --audit-level high                      # known vulnerabilities (all deps, incl. toolchain)
 gitleaks git --pre-commit --staged --redact     # secrets scan before every commit
 ```
 
@@ -36,6 +36,9 @@ gitleaks git --pre-commit --staged --redact     # secrets scan before every comm
 - GitHub Actions are pinned by full commit SHA with a version comment; the
   workflow `GITHUB_TOKEN` stays read-only unless a job needs more.
 - Dependencies: pnpm and its lockfile only; check license and maintenance first.
+  `pnpm-workspace.yaml` enforces a 7-day minimum release age, no unreviewed build
+  scripts, no exotic sub-dependencies and no trust downgrades; do not relax it
+  without a security review.
 - Tests: see CONTRIBUTING.md. Never call the real API from tests.
 
 ## Risk map
