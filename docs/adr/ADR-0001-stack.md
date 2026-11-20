@@ -11,14 +11,14 @@ install easily in Claude Desktop, Claude Code (plugin), Cursor and other agents.
 
 ## Options
 
-| | Go | Python (legacy) | Rust | TypeScript |
-|---|---|---|---|---|
-| Static binary with no runtime | yes (`CGO_ENABLED=0`) | no (PyInstaller per arch) | yes | no |
-| Cross-compiling to armv7/arm64/Windows | trivial | hard | good (cross-rs) | n/a |
-| Packaging for every channel | GoReleaser does all of it | manual | partial | npm only |
-| CLI/TUI ecosystem | Cobra, Bubble Tea | click, Textual | clap, ratatui | ink |
-| MCP distribution | binary per OS inside the plugin | — | same as Go | `npx`, `.mcpb` with bundled Node, one `.mjs` |
-| Contributor ramp-up | low | low | high | low |
+|                                        | Go                              | Python (legacy)           | Rust            | TypeScript                                   |
+| -------------------------------------- | ------------------------------- | ------------------------- | --------------- | -------------------------------------------- |
+| Static binary with no runtime          | yes (`CGO_ENABLED=0`)           | no (PyInstaller per arch) | yes             | no                                           |
+| Cross-compiling to armv7/arm64/Windows | trivial                         | hard                      | good (cross-rs) | n/a                                          |
+| Packaging for every channel            | GoReleaser does all of it       | manual                    | partial         | npm only                                     |
+| CLI/TUI ecosystem                      | Cobra, Bubble Tea               | click, Textual            | clap, ratatui   | ink                                          |
+| MCP distribution                       | binary per OS inside the plugin | —                         | same as Go      | `npx`, `.mcpb` with bundled Node, one `.mjs` |
+| Contributor ramp-up                    | low                             | low                       | high            | low                                          |
 
 ## Decision
 

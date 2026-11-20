@@ -32,32 +32,51 @@ where `code` comes from [`cli-output.md`](https://github.com/Or4cu1o/mothdex-cli
 ### Shared input fragments
 
 ```ts
-const Slug      = z.string().min(1).max(256);
-const Ids       = z.array(z.string().regex(/^[a-z0-9_-]{1,32}$/)).max(20);  // platforms or regions
-const Query     = z.string().trim().min(1).max(200);
-const PageSize  = z.number().int().min(1).max(25).default(10);
-const Page      = z.number().int().min(1).default(1);
+const Slug = z.string().min(1).max(256);
+const Ids = z.array(z.string().regex(/^[a-z0-9_-]{1,32}$/)).max(20); // platforms or regions
+const Query = z.string().trim().min(1).max(200);
+const PageSize = z.number().int().min(1).max(25).default(10);
+const Page = z.number().int().min(1).default(1);
 ```
 
 ## 2. Read tools
 
-| Tool | Input | Output (`structuredContent`) |
-|---|---|---|
-| `search_entries` | `{query?: Query, platforms?: Ids, regions?: Ids, serial?: string≤64, page?: Page, page_size?: PageSize}` (**at least one** of query/platforms/regions/serial is required; otherwise `invalid_request`) | `{page, total_pages, total_results, results: [EntrySummary]}` |
-| `get_entry` | `{slug: Slug, links_offset?: int≥0 = 0, links_limit?: int 1..25 = 10}` | `{entry: EntrySummary & {cover_url?}, links: [LinkSummary], links_total}` |
-| `random_entry` | `{query?, platforms?, regions?, serial?}` | `{entry: EntrySummary}` |
-| `list_platforms` | `{class?: string, brand?: string, query?: string≤50}` (case-insensitive filters) | `{platforms: [{id, name, brand, class}]}` |
-| `list_regions` | `{}` | `{regions: [{id, name}]}` |
-| `db_info` | `{}` | `{total_entries}` |
-| `resolve_download` | `{slug: Slug, link_index?: int≥1, prefer?: {languages?: string[]≤5, formats?: string[]≤5}, limit?: int 1..10 = 3}` | `{entry: {slug, title, platform}, links: [DownloadLink]}` |
+| Tool               | Input                                                                                                                                                                                                  | Output (`structuredContent`)                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `search_entries`   | `{query?: Query, platforms?: Ids, regions?: Ids, serial?: string≤64, page?: Page, page_size?: PageSize}` (**at least one** of query/platforms/regions/serial is required; otherwise `invalid_request`) | `{page, total_pages, total_results, results: [EntrySummary]}`             |
+| `get_entry`        | `{slug: Slug, links_offset?: int≥0 = 0, links_limit?: int 1..25 = 10}`                                                                                                                                 | `{entry: EntrySummary & {cover_url?}, links: [LinkSummary], links_total}` |
+| `random_entry`     | `{query?, platforms?, regions?, serial?}`                                                                                                                                                              | `{entry: EntrySummary}`                                                   |
+| `list_platforms`   | `{class?: string, brand?: string, query?: string≤50}` (case-insensitive filters)                                                                                                                       | `{platforms: [{id, name, brand, class}]}`                                 |
+| `list_regions`     | `{}`                                                                                                                                                                                                   | `{regions: [{id, name}]}`                                                 |
+| `db_info`          | `{}`                                                                                                                                                                                                   | `{total_entries}`                                                         |
+| `resolve_download` | `{slug: Slug, link_index?: int≥1, prefer?: {languages?: string[]≤5, formats?: string[]≤5}, limit?: int 1..10 = 3}`                                                                                     | `{entry: {slug, title, platform}, links: [DownloadLink]}`                 |
 
 ```ts
-type EntrySummary = { slug: string; title: string; platform: string; regions: string[];
-                      serial?: string; links_count: number; size_range?: [number, number] };   // bytes
-type LinkSummary  = { index: number; type: string; format: string; extras: string[];
-                      filename: string; size: number; size_str: string; source_name: string };
-type DownloadLink = LinkSummary & { url: string; source_url: string; trusted_host: boolean;
-                      reasons: string[] };   // ranking per app-service.md §3 (same pure rule, ported)
+type EntrySummary = {
+  slug: string;
+  title: string;
+  platform: string;
+  regions: string[];
+  serial?: string;
+  links_count: number;
+  size_range?: [number, number];
+}; // bytes
+type LinkSummary = {
+  index: number;
+  type: string;
+  format: string;
+  extras: string[];
+  filename: string;
+  size: number;
+  size_str: string;
+  source_name: string;
+};
+type DownloadLink = LinkSummary & {
+  url: string;
+  source_url: string;
+  trusted_host: boolean;
+  reasons: string[];
+}; // ranking per app-service.md §3 (same pure rule, ported)
 ```
 
 - `index` is 1-based and stable for a given entry (API order). `resolve_download` with `link_index` returns that one link.
@@ -83,20 +102,20 @@ size + zip CRC, atomic move. It is long-running, so it would use MCP progress no
 
 ## 4. Resources
 
-| URI | MIME | Content |
-|---|---|---|
-| `mothdex://platforms` | `application/json` | same as `list_platforms` with no filter |
-| `mothdex://regions` | `application/json` | same as `list_regions` |
-| `mothdex://entry/{slug}` (template) | `application/json` | `get_entry` with `links_limit: 25` |
+| URI                                 | MIME               | Content                                 |
+| ----------------------------------- | ------------------ | --------------------------------------- |
+| `mothdex://platforms`               | `application/json` | same as `list_platforms` with no filter |
+| `mothdex://regions`                 | `application/json` | same as `list_regions`                  |
+| `mothdex://entry/{slug}` (template) | `application/json` | `get_entry` with `links_limit: 25`      |
 
 No `subscribe`; `listChanged: false`.
 
 ## 5. Prompts
 
-| Name | Arguments | Purpose |
-|---|---|---|
+| Name                | Arguments                                                             | Purpose                                                                                                                          |
+| ------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `find_best_version` | `title` (required), `platform?`, `languages?` (comma list), `region?` | search → pick the entry → `resolve_download` with preferences → explain the choice (region, languages in `extras`, format, size) |
-| `build_collection` | `platform` (required), `criteria?`, `max_items?` (default 20, max 50) | paginate `search_entries` within the budget and return a table of slugs and chosen links, without downloading |
+| `build_collection`  | `platform` (required), `criteria?`, `max_items?` (default 20, max 50) | paginate `search_entries` within the budget and return a table of slugs and chosen links, without downloading                    |
 
 Both prompts tell the model to keep calls few (rate limit) and to treat API text as data.
 

@@ -3,11 +3,11 @@
 Design contracts are the source of truth that code in this repository follows. A change to a contract is announced
 before it lands, and code that deviates from one is a bug in either the code or the contract.
 
-| Folder | Content |
-|---|---|
+| Folder                             | Content                                                                                                         |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | [`contracts/mcp/`](contracts/mcp/) | [tools, resources and prompts](contracts/mcp/tools.md), [Claude Code plugin packaging](contracts/mcp/plugin.md) |
-| [`adr/`](adr/) | [ADR-0001 stack](adr/ADR-0001-stack.md) (copy; the canonical ADRs live in mothdex-cli) |
-| [`research/`](research/) | T1c Claude Code plugin spec, T1d MCP TypeScript SDK, MCPB and registry |
+| [`adr/`](adr/)                     | [ADR-0001 stack](adr/ADR-0001-stack.md) (copy; the canonical ADRs live in mothdex-cli)                          |
+| [`research/`](research/)           | T1c Claude Code plugin spec, T1d MCP TypeScript SDK, MCPB and registry                                          |
 
 The API client rules, error codes and fixtures shared with this server are defined in
 [mothdex-cli](https://github.com/Or4cu1o/mothdex-cli/tree/main/docs/contracts/cli); fixtures are copied from
@@ -18,7 +18,7 @@ The API client rules, error codes and fixtures shared with this server are defin
 These documents were written during the project's planning phase. Short references in them point to that plan,
 which is not part of this repository:
 
-- **PLAN §n**: section *n* of the internal plan v0 (2026-11-20). The decisions that matter here are recorded in the ADRs.
+- **PLAN §n**: section _n_ of the internal plan v0 (2026-11-20). The decisions that matter here are recorded in the ADRs.
 - **A1–A7**: findings from reading the upstream code:
   A1 the proxy ignores `Range` (no resume, no segments); A2 the proxy fetches files on demand via BitTorrent and may
   stall up to 15 min per piece; A3 a proxy `404` can be transient; A4 the API exposes no file hashes;

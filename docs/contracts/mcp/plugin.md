@@ -32,6 +32,7 @@ mothdex-mcp/
 ## 3. Files
 
 `.claude-plugin/plugin.json`:
+
 ```json
 {
   "name": "mothdex",
@@ -48,18 +49,24 @@ mothdex-mcp/
 ```
 
 `.claude-plugin/marketplace.json`:
+
 ```json
 {
   "name": "mothdex-mcp",
   "description": "Mothdex plugin for Claude Code",
   "owner": { "name": "Or4cu1o" },
   "plugins": [
-    { "name": "mothdex", "source": "./", "description": "Search the Mothdex game catalog and resolve download links" }
+    {
+      "name": "mothdex",
+      "source": "./",
+      "description": "Search the Mothdex game catalog and resolve download links"
+    }
   ]
 }
 ```
 
 `.mcp.json`:
+
 ```json
 {
   "mcpServers": {
@@ -72,6 +79,7 @@ mothdex-mcp/
 ```
 
 Rules:
+
 - The entry `name` equals the manifest `name` (`mothdex`); names avoid the reserved prefixes (`claude-`, `anthropic-`, `cc-plugin-`).
 - `license` is `GPL-3.0-only`, the same SPDX id as `package.json` in both repos (checked in the T-4 scaffold PR).
 - `version` is bumped on **every** release (otherwise installed users stay pinned). One release script writes the same
@@ -91,6 +99,7 @@ Rules:
 ## 5. Future (M3', not in v0.1)
 
 When `download_file` arrives (tools.md §3), add to `plugin.json`:
+
 ```json
 "userConfig": { "download_dir": { "type": "directory", "title": "Download directory",
   "description": "The only folder where download_file may write", "required": false } }
