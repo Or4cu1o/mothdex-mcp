@@ -16,3 +16,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   test, build on Linux, Windows and macOS; `pnpm audit` of production
   dependencies; gitleaks) with actions pinned by commit SHA.
 - Dependabot for npm and GitHub Actions.
+
+[Unreleased]: https://github.com/Or4cu1o/mothdex-mcp/commits/main

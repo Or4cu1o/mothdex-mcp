@@ -10,7 +10,8 @@ Please **do not open a public issue**. Report privately through GitHub:
 <https://github.com/Or4cu1o/mothdex-mcp/security/advisories/new>
 
 Include the affected version or commit, what you observed and how to reproduce
-it. You can expect an acknowledgement within a few days.
+it. You can expect an acknowledgement within 7 days. Fixes are coordinated with the
+reporter and disclosed within 90 days of the report at the latest.
 
 ## Scope
 

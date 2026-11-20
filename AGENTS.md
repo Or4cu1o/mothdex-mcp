@@ -37,10 +37,10 @@ gitleaks git --pre-commit --staged --redact     # secrets scan before every comm
 
 The riskiest file in a change sets the level of the whole change.
 
-| Surface                                                                            | Level                                 |
-| ---------------------------------------------------------------------------------- | ------------------------------------- |
-| Docs, README, styles                                                               | Low                                   |
-| Read tools, resources, prompts, API client                                         | Medium                                |
-| Writing files with a path or name chosen by an LLM or the server (`download_file`) | **High**                              |
-| Release CI, bundle integrity, publishing (npm, `.mcpb`, registry), tokens          | **High** (supply chain and secrets)   |
-| Archiving repositories, merges, releases, publications                             | external action: needs owner approval |
+| Surface                                                                                                                | Level                                 |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Docs, README, styles                                                                                                   | Low                                   |
+| Read tools, resources, prompts, API client                                                                             | Medium                                |
+| Writing files with a path or name chosen by an LLM or the server (`download_file`)                                     | **High**                              |
+| CI workflows (`.github/workflows`), Dependabot, release, bundle integrity, publishing (npm, `.mcpb`, registry), tokens | **High** (supply chain and secrets)   |
+| Archiving repositories, merges, releases, publications                                                                 | external action: needs owner approval |

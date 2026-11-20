@@ -15,3 +15,15 @@ coverage/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Key material (release, signing, publishing)
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+cosign.key
+.npmrc
+id_rsa*
+id_ed25519*
+*.kdbx
