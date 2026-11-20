@@ -33,6 +33,11 @@ pnpm build
 gitleaks git --pre-commit --staged --redact
 ```
 
+Node baseline: `engines.node` is `>=24` and the bundle targets `node24` because
+Node 24 and 26 are the LTS lines this project builds and tests against
+(`.node-version` and CI use 26). It is a deliberate floor for the skeleton and
+will be revisited against the MCP SDK's minimum version when the SDK is added.
+
 Use `pnpm format` to apply Biome fixes. Use the lockfile manager only: do not
 use npm or yarn, and check license and maintenance before adding a dependency.
 
