@@ -164,11 +164,33 @@ describe("transport rules", () => {
     },
   );
 
+  it("resolves a relative Location against the current URL, not the first", async () => {
+    const { client, seen } = makeClient([
+      { status: 307, headers: { location: "/v1/a/b" } },
+      { status: 307, headers: { location: "c" } },
+      ok("info.json"),
+    ]);
+    await client.info();
+    expect(seen.map((s) => s.url).at(-1)).toBe("https://api.mothdex.net/v1/a/c");
+  });
+
+  it("refuses a 3xx without Location with its own message", async () => {
+    const { client } = makeClient([{ status: 302 }]);
+    const error = await fail(client.info());
+    expect(isMothdexError(error) && [error.kind, error.detail]).toEqual([
+      "untrusted_redirect",
+      "redirect without a usable target",
+    ]);
+  });
+
   it("refuses the 4th hop with one fetch per hop and no retry", async () => {
     const hop = { status: 307, headers: { location: "/v1/next" } };
     const { client, seen } = makeClient([hop]);
     const error = await fail(client.info());
-    expect(isMothdexError(error) && error.kind).toBe("untrusted_redirect");
+    expect(isMothdexError(error) && [error.kind, error.detail]).toEqual([
+      "untrusted_redirect",
+      "too many redirects",
+    ]);
     expect(seen).toHaveLength(4);
   });
 

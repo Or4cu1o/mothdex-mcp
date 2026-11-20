@@ -1,6 +1,6 @@
 import { MothdexError } from "./errors";
 import type { FetchFn } from "./options";
-import { MAX_BODY_BYTES } from "./parse";
+import { cleanMessage, MAX_BODY_BYTES } from "./parse";
 
 const MAX_REDIRECTS = 3;
 const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
@@ -61,6 +61,15 @@ function resolveTarget(from: URL, location: string | null): URL | undefined {
   }
 }
 
+/** Why a redirect is refused, or undefined when it may be followed. Only the target host is named. */
+function refusalDetail(target: URL | undefined, first: URL, hops: number): string | undefined {
+  if (target === undefined) return "redirect without a usable target";
+  if (target.origin !== first.origin) {
+    return `redirect to ${cleanMessage(target.host)} refused`;
+  }
+  return hops >= MAX_REDIRECTS ? "too many redirects" : undefined;
+}
+
 /**
  * One HTTP exchange. Redirects are followed by hand, at most three and only inside the same
  * origin (scheme, host and port); anything else is "untrusted_redirect", as in the Go client. 301/302/303 turn into a body-less GET; 307/308 keep the request.
@@ -85,14 +94,15 @@ export async function exchange(fetchFn: FetchFn, request: RawRequest): Promise<R
       };
     }
     await response.body?.cancel();
-    const target = resolveTarget(first, response.headers.get("location"));
-    if (hops >= MAX_REDIRECTS || target === undefined || target.origin !== first.origin) {
+    const target = resolveTarget(url, response.headers.get("location"));
+    const refusal = refusalDetail(target, first, hops);
+    if (target === undefined || refusal !== undefined) {
       // Not retried and not a 429: kind "untrusted_redirect" is outside the retry rule.
       throw new MothdexError({
         kind: "untrusted_redirect",
         op: request.op,
         httpStatus: response.status,
-        detail: `redirect to ${target?.host ?? "an unparsable target"} refused`,
+        detail: refusal ?? "redirect without a usable target",
       });
     }
     url = target;
