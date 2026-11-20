@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Tools contract: a refused redirect is the non-retryable error code `untrusted_redirect`, never `network`.
+
 ### Added
 
 - Design documentation in `docs/`: contracts for the MCP tools, resources and prompts (SDK v2) and for the
