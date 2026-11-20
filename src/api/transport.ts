@@ -68,12 +68,12 @@ function sameOriginTarget(from: URL, location: string | null): URL | undefined {
  * origin, as in the Go client. 301/302/303 turn into a body-less GET; 307/308 keep the request.
  */
 export async function exchange(fetchFn: FetchFn, request: RawRequest): Promise<RawResponse> {
-  let { method, url, payload } = request;
+  let { method, url, payload, headers } = request;
   const first = url;
   for (let hops = 0; ; hops++) {
     const init: RequestInit = {
       method,
-      headers: request.headers,
+      headers,
       redirect: "manual",
       signal: request.signal,
       ...(payload === undefined ? {} : { body: payload }),
@@ -100,6 +100,9 @@ export async function exchange(fetchFn: FetchFn, request: RawRequest): Promise<R
     if (response.status !== 307 && response.status !== 308) {
       method = "GET";
       payload = undefined;
+      headers = Object.fromEntries(
+        Object.entries(request.headers).filter(([name]) => name !== "content-type"),
+      );
     }
   }
 }

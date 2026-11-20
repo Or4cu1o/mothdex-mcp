@@ -15,6 +15,8 @@ const STATUS_TEXT: ReadonlyMap<number, string> = new Map([
 ]);
 
 const CONTROL_OR_FORMAT = /[\p{Cc}\p{Cf}]/gu;
+/** HTTP dates start with a weekday name (IMF-fixdate, RFC 850, asctime); Date.parse accepts far more. */
+const HTTP_DATE_PREFIX = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,? /;
 const DIGITS = /^[+-]?\d+$/;
 
 /**
@@ -42,6 +44,7 @@ export function parseRetryAfter(value: string | null, nowMs: number): number {
     const secs = Number(text);
     return secs <= 0 ? 0 : Math.min(secs * 1000, MAX_RETRY_AFTER_MS);
   }
+  if (!HTTP_DATE_PREFIX.test(text)) return 0;
   const date = Date.parse(text);
   if (Number.isNaN(date)) return 0;
   return Math.min(Math.max(date - nowMs, 0), MAX_RETRY_AFTER_MS);

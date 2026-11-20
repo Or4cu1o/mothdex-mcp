@@ -47,6 +47,7 @@ describe("server text and Retry-After", () => {
     ["junk", 0, 0],
     ["999999999", 0, 24 * 3600_000],
     ["Thu, 01 Jan 1970 00:00:10 GMT", 4_000, 6_000],
+    ["Jan 1 2026", 0, 0],
   ])("Retry-After %j at %d ms gives %d ms", (value, now, expected) => {
     expect(parseRetryAfter(value, now)).toBe(expected);
   });

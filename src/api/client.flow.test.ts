@@ -82,6 +82,7 @@ describe("retries and the 429 circuit", () => {
 describe("requests that never reach the API", () => {
   it.each([
     ["empty slug", (c: MothdexClient) => c.entry("")],
+    ["non-string slug", (c: MothdexClient) => c.entry(42 as unknown as string)],
     ["slug over 256 bytes", (c: MothdexClient) => c.entry("é".repeat(129))],
     ["max_results over 100", (c: MothdexClient) => c.search({ searchKey: "x", maxResults: 101 })],
     ["negative page", (c: MothdexClient) => c.search({ searchKey: "x", page: -1 })],
@@ -95,6 +96,21 @@ describe("requests that never reach the API", () => {
     const error = await fail(call(client));
     expect(isMothdexError(error) && error.kind).toBe("invalid_request");
     expect(seen).toHaveLength(0);
+  });
+});
+
+describe("constructor options", () => {
+  it.each([
+    { rateLimit: Number.NaN },
+    { rateLimit: Number.POSITIVE_INFINITY },
+    { burst: Number.NaN },
+    { maxRetries: Number.NaN },
+    { timeoutMs: Number.POSITIVE_INFINITY },
+    { timeoutMs: Number.NaN },
+    { timeoutMs: 0 },
+    { timeoutMs: 1.5 },
+  ])("refuses %j", (options) => {
+    expect(() => new MothdexClient(options)).toThrow(/^Error: mothdex: |^mothdex: /);
   });
 });
 
@@ -136,6 +152,22 @@ describe("transport rules", () => {
     const error = await fail(cross.client.info());
     expect(isMothdexError(error) && error.kind).toBe("network");
     expect(cross.seen).toHaveLength(1);
+  });
+
+  it("drops content-type when a redirect turns the POST into a GET", async () => {
+    const headersSeen: (string | null)[] = [];
+    const answers = [
+      new Response(null, { status: 302, headers: { location: "/v1/entry2" } }),
+      new Response(fixture("entry.json")),
+    ];
+    const client = new MothdexClient({
+      fetch: async (_url, init) => {
+        headersSeen.push(new Headers(init.headers).get("content-type"));
+        return answers.shift() ?? new Response("{}");
+      },
+    });
+    await client.entry("doom-1993-dos");
+    expect(headersSeen).toEqual(["application/json", null]);
   });
 
   it("refuses a body over 16 MiB", async () => {

@@ -7,6 +7,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 const OWNER_REPO = "Or4cu1o/mothdex-cli";
 const REMOTE_DIR = "pkg/mothdex/testdata/api-v1";
 const LOCAL_DIR = new URL("../src/api/testdata/api-v1/", import.meta.url);
+const FETCH_TIMEOUT_MS = 20_000;
 const SAFE_NAME = /^[a-z0-9-]+\.json$/;
 
 async function getJson(url, token) {
@@ -15,13 +16,16 @@ async function getJson(url, token) {
     "user-agent": "mothdex-mcp-fixture-check",
   };
   if (token) headers.authorization = `Bearer ${token}`;
-  const res = await fetch(url, { headers });
+  const res = await fetch(url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`GET ${url} answered HTTP ${res.status}`);
   return res.json();
 }
 
 async function getText(url) {
-  const res = await fetch(url, { headers: { "user-agent": "mothdex-mcp-fixture-check" } });
+  const res = await fetch(url, {
+    headers: { "user-agent": "mothdex-mcp-fixture-check" },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`GET ${url} answered HTTP ${res.status}`);
   return res.text();
 }
@@ -36,14 +40,16 @@ async function readLocal() {
 }
 
 async function readRemote(token) {
+  // Pin one commit first so the listing and the contents cannot come from different commits.
+  const sha = (await getJson(`https://api.github.com/repos/${OWNER_REPO}/commits/main`, token)).sha;
+  if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error("unexpected commit sha from the GitHub API");
   const listing = await getJson(
-    `https://api.github.com/repos/${OWNER_REPO}/contents/${REMOTE_DIR}?ref=main`,
+    `https://api.github.com/repos/${OWNER_REPO}/contents/${REMOTE_DIR}?ref=${sha}`,
     token,
   );
   const names = listing.filter((item) => item.type === "file").map((item) => item.name);
   const unsafe = names.filter((name) => !SAFE_NAME.test(name));
   if (unsafe.length > 0) throw new Error(`unexpected remote file names: ${unsafe.join(", ")}`);
-  const sha = (await getJson(`https://api.github.com/repos/${OWNER_REPO}/commits/main`, token)).sha;
   return {
     sha,
     files: new Map(

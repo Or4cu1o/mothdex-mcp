@@ -84,7 +84,18 @@ export function resolveOptions(
   parseBaseUrl: (raw: string) => URL,
 ): ResolvedOptions {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  if (!(timeoutMs > 0)) throw new Error(`mothdex: timeout must be positive, got ${timeoutMs}`);
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new Error("mothdex: timeoutMs must be a positive integer");
+  }
+  for (const [name, value] of [
+    ["rateLimit", options.rateLimit],
+    ["burst", options.burst],
+    ["maxRetries", options.maxRetries],
+  ] as const) {
+    if (value !== undefined && !Number.isFinite(value)) {
+      throw new Error(`mothdex: ${name} must be a finite number`);
+    }
+  }
   return {
     baseUrl: parseBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL),
     fetch: options.fetch ?? ((input, init) => fetch(input, init)),

@@ -10,6 +10,7 @@ function invalid(op: string, detail: string): MothdexError {
 }
 
 export function validateSlug(op: string, slug: string): void {
+  if (typeof slug !== "string") throw invalid(op, "slug must be a string");
   if (slug === "") throw invalid(op, "slug is required");
   if (Buffer.byteLength(slug, "utf8") > MAX_SLUG_BYTES) {
     throw invalid(op, `slug longer than ${MAX_SLUG_BYTES} bytes`);
