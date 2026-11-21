@@ -222,7 +222,13 @@ export async function runDownload(
     if ((await rt.fs.realpath(dest).catch(() => undefined)) !== dest) {
       throw new DownloadFailure("path_rejected", "the folder changed before finalize");
     }
-    const placed = await placeWithoutReplacing(rt.fs, part, final);
+    const placed = await placeWithoutReplacing(rt.fs, part, final).catch((error: unknown) => {
+      // A link or copy error that is not EEXIST: a stable code, never an internal error (Alicerce S3).
+      const mapped = classify(error);
+      throw mapped instanceof DownloadFailure
+        ? mapped
+        : new DownloadFailure("path_rejected", codeOf(error));
+    });
     if (placed === "exists") return existsResult(final);
     state.noteCompleted();
     rt.log(`download ${jobId} done: host ${DOWNLOAD_HOST}, ${result.bytes} bytes`);

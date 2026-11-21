@@ -19,7 +19,21 @@ export interface DestinationContext {
 
 const LAUNCHER_FOLDERS: ReadonlySet<string> = new Set(["ports", "ports_scripts", "windows"]);
 const HOME_DENY = [".ssh", ".gnupg", ".config", ".local/bin", ".claude", ".cursor", ".vscode"];
-const POSIX_DENY = ["/etc", "/usr", "/bin", "/sbin", "/boot", "/System", "/Library"];
+const POSIX_DENY = [
+  "/etc",
+  "/usr",
+  "/bin",
+  "/sbin",
+  "/boot",
+  "/System",
+  "/Library",
+  "/var",
+  "/opt",
+  "/dev",
+  "/proc",
+  "/sys",
+  "/run",
+];
 
 const flavor = (platform: NodeJS.Platform) => (platform === "win32" ? path.win32 : path.posix);
 const foldCase = (platform: NodeJS.Platform) =>
@@ -33,7 +47,9 @@ function deniedFolders(ctx: Pick<DestinationContext, "platform" | "env">, home: 
   const denied = HOME_DENY.map((part) => p.join(home, ...part.split("/")));
   if (ctx.platform !== "win32") denied.push(...POSIX_DENY);
   const { APPDATA, LOCALAPPDATA, PROGRAMDATA, CLAUDE_PLUGIN_ROOT, CLAUDE_PLUGIN_DATA } = ctx.env;
+  const programFiles = [ctx.env.ProgramFiles, ctx.env["ProgramFiles(x86)"], ctx.env.SystemRoot];
   if (ctx.platform === "win32") {
+    for (const base of programFiles) if (base) denied.push(base);
     for (const base of [APPDATA, LOCALAPPDATA && p.join(LOCALAPPDATA, "Microsoft")])
       if (base) denied.push(base);
     for (const base of [APPDATA, PROGRAMDATA]) {
@@ -58,7 +74,8 @@ export function denyReason(
   const here = fold(p.normalize(real));
   const isInside = (parent: string): boolean => {
     const rel = p.relative(fold(p.normalize(parent)), here);
-    return rel === "" || (!rel.startsWith("..") && !p.isAbsolute(rel));
+    // "..x" is a child named with two dots, not a parent; only ".." or "../" leaves the folder.
+    return rel === "" || (rel !== ".." && !rel.startsWith(`..${p.sep}`) && !p.isAbsolute(rel));
   };
   if (p.parse(real).root === real || here === fold(p.parse(real).root)) return "a filesystem root";
   if (here === fold(p.normalize(home))) return "the home folder itself";

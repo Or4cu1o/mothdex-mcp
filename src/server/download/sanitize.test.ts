@@ -42,7 +42,7 @@ describe("Sanitize vectors shared with mothdex-cli", () => {
 });
 
 /** T-60 case 10: invariants and idempotence on hard inputs, with a seeded generator (no dependency). */
-describe("Sanitize invariants", () => {
+describe("case 10: Sanitize invariants", () => {
   const fallback = { slug: "slug", format: "zip", jobId: "jobid" };
   const seeded = (seed: number) => () => {
     seed = (seed * 1664525 + 1013904223) >>> 0;

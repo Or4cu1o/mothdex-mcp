@@ -113,6 +113,8 @@ export async function transfer(options: TransferOptions): Promise<TransferResult
         options.onProgress(bytes);
       }
     } catch (error) {
+      // Whatever the reason, the body and its connection are released before the call fails.
+      await reader.cancel().catch(() => undefined);
       if (error instanceof DownloadFailure) throw error;
       if (options.signal.aborted || timedOut) throw failed();
       throw error; // a write failure (ENOSPC, EDQUOT) is classified by the caller

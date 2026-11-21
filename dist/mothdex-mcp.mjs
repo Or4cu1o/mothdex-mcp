@@ -4,9 +4,6 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// src/index.ts
-import { unlinkSync } from "node:fs";
-
 // node_modules/.pnpm/@modelcontextprotocol+server@2.4.0/node_modules/@modelcontextprotocol/server/dist/chunk-vYduTEsO.mjs
 var __create = Object.create;
 var __defProp2 = Object.defineProperty;
@@ -23948,7 +23945,21 @@ var DestinationRejected = class extends Error {
 };
 var LAUNCHER_FOLDERS = /* @__PURE__ */ new Set(["ports", "ports_scripts", "windows"]);
 var HOME_DENY = [".ssh", ".gnupg", ".config", ".local/bin", ".claude", ".cursor", ".vscode"];
-var POSIX_DENY = ["/etc", "/usr", "/bin", "/sbin", "/boot", "/System", "/Library"];
+var POSIX_DENY = [
+  "/etc",
+  "/usr",
+  "/bin",
+  "/sbin",
+  "/boot",
+  "/System",
+  "/Library",
+  "/var",
+  "/opt",
+  "/dev",
+  "/proc",
+  "/sys",
+  "/run"
+];
 var flavor = (platform) => platform === "win32" ? path.win32 : path.posix;
 var foldCase = (platform) => platform === "win32" || platform === "darwin" ? (text) => text.toLowerCase() : (text) => text;
 function deniedFolders(ctx, home) {
@@ -23956,7 +23967,9 @@ function deniedFolders(ctx, home) {
   const denied = HOME_DENY.map((part) => p.join(home, ...part.split("/")));
   if (ctx.platform !== "win32") denied.push(...POSIX_DENY);
   const { APPDATA, LOCALAPPDATA, PROGRAMDATA, CLAUDE_PLUGIN_ROOT, CLAUDE_PLUGIN_DATA } = ctx.env;
+  const programFiles = [ctx.env.ProgramFiles, ctx.env["ProgramFiles(x86)"], ctx.env.SystemRoot];
   if (ctx.platform === "win32") {
+    for (const base of programFiles) if (base) denied.push(base);
     for (const base of [APPDATA, LOCALAPPDATA && p.join(LOCALAPPDATA, "Microsoft")])
       if (base) denied.push(base);
     for (const base of [APPDATA, PROGRAMDATA]) {
@@ -23974,7 +23987,7 @@ function denyReason(real, home, ctx, extraDenied = []) {
   const here = fold(p.normalize(real));
   const isInside = (parent) => {
     const rel = p.relative(fold(p.normalize(parent)), here);
-    return rel === "" || !rel.startsWith("..") && !p.isAbsolute(rel);
+    return rel === "" || rel !== ".." && !rel.startsWith(`..${p.sep}`) && !p.isAbsolute(rel);
   };
   if (p.parse(real).root === real || here === fold(p.parse(real).root)) return "a filesystem root";
   if (here === fold(p.normalize(home))) return "the home folder itself";
@@ -24042,7 +24055,7 @@ var realFs = {
   lstat: (path3) => fsp.lstat(path3),
   open: (path3, flags, mode) => fsp.open(path3, flags, mode),
   link: (existing, created) => fsp.link(existing, created),
-  copyFileExcl: (source, target) => fsp.copyFile(source, target, fs.constants.COPYFILE_EXCL),
+  copyFileExcl: (source, target) => copyExclusive(source, target),
   unlink: (path3) => fsp.unlink(path3),
   readdir: (path3) => fsp.readdir(path3),
   freeBytes: async (path3) => {
@@ -24052,6 +24065,38 @@ var realFs = {
 };
 var codeOf = (error2) => typeof error2 === "object" && error2 !== null && "code" in error2 ? String(error2.code) : void 0;
 var STAGING_FLAGS = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0);
+var CHUNK_BYTES = 1024 * 1024;
+async function copyExclusive(source, target, onChunk = () => {
+}) {
+  const input = await fsp.open(source, "r");
+  try {
+    const mode = (await input.stat()).mode & 511;
+    const output = await fsp.open(target, STAGING_FLAGS, mode);
+    try {
+      const buffer = Buffer.allocUnsafe(CHUNK_BYTES);
+      let written = 0;
+      for (; ; ) {
+        const { bytesRead } = await input.read(buffer, 0, CHUNK_BYTES, null);
+        if (bytesRead === 0) break;
+        let offset = 0;
+        while (offset < bytesRead) {
+          offset += (await output.write(buffer, offset, bytesRead - offset)).bytesWritten;
+        }
+        written += bytesRead;
+        onChunk(written);
+      }
+      await output.sync();
+      await output.chmod(mode);
+    } catch (error2) {
+      await output.close().catch(() => void 0);
+      await fsp.unlink(target).catch(() => void 0);
+      throw error2;
+    }
+    await output.close();
+  } finally {
+    await input.close();
+  }
+}
 
 // src/server/download/finalize.ts
 var NO_LINK_CODES = /* @__PURE__ */ new Set([
@@ -24274,6 +24319,7 @@ async function transfer(options) {
         options.onProgress(bytes);
       }
     } catch (error2) {
+      await reader.cancel().catch(() => void 0);
       if (error2 instanceof DownloadFailure) throw error2;
       if (options.signal.aborted || timedOut) throw failed();
       throw error2;
@@ -24433,7 +24479,10 @@ async function runDownload(rt, env, args, onProgress) {
     if (await rt.fs.realpath(dest).catch(() => void 0) !== dest) {
       throw new DownloadFailure("path_rejected", "the folder changed before finalize");
     }
-    const placed = await placeWithoutReplacing(rt.fs, part, final);
+    const placed = await placeWithoutReplacing(rt.fs, part, final).catch((error2) => {
+      const mapped = classify(error2);
+      throw mapped instanceof DownloadFailure ? mapped : new DownloadFailure("path_rejected", codeOf(error2));
+    });
     if (placed === "exists") return existsResult(final);
     state.noteCompleted();
     rt.log(`download ${jobId} done: host ${DOWNLOAD_HOST}, ${result.bytes} bytes`);
@@ -24947,6 +24996,43 @@ async function prepareDownload(env, warn, seams = {}) {
   };
 }
 
+// src/server/download/shutdown.ts
+import { unlinkSync } from "node:fs";
+var SIGNAL_EXIT = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 };
+function installShutdownHandlers(state, options = {}) {
+  const proc = options.proc ?? process;
+  const stdin = options.stdin ?? process.stdin;
+  const exit = options.exit ?? ((code) => process.exit(code));
+  const removeParts = () => {
+    for (const part of state.activeParts) {
+      try {
+        unlinkSync(part);
+      } catch {
+      }
+    }
+  };
+  const stop = () => state.shutdown.abort();
+  const onExit = () => removeParts();
+  const listeners = Object.entries(SIGNAL_EXIT).map(([signal, code]) => {
+    const handler = () => {
+      stop();
+      removeParts();
+      exit(code);
+    };
+    proc.on(signal, handler);
+    return [signal, handler];
+  });
+  stdin.once("end", stop);
+  stdin.once("close", stop);
+  proc.once("exit", onExit);
+  return () => {
+    for (const [signal, handler] of listeners) proc.off(signal, handler);
+    stdin.off("end", stop);
+    stdin.off("close", stop);
+    proc.off("exit", onExit);
+  };
+}
+
 // src/index.ts
 async function main() {
   if (process.argv.includes("--version")) {
@@ -24961,19 +25047,7 @@ async function main() {
 `);
     };
     const download = await prepareDownload(process.env, warn);
-    if (download !== void 0) {
-      const stop = () => download.state.shutdown.abort();
-      process.stdin.once("end", stop);
-      process.stdin.once("close", stop);
-      process.once("exit", () => {
-        for (const part of download.state.activeParts) {
-          try {
-            unlinkSync(part);
-          } catch {
-          }
-        }
-      });
-    }
+    if (download !== void 0) installShutdownHandlers(download.state);
     serveStdio(
       createServerFactory({ config: config2, version: package_default.version, ...download ? { download } : {} }),
       {

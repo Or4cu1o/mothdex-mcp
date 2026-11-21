@@ -71,6 +71,8 @@ export interface ProxyLog {
   urls: string[];
   inits: RequestInit[];
   pulled: number[];
+  /** Whether each response body was cancelled (the connection released). */
+  cancelled: boolean[];
 }
 
 const enc = new TextEncoder();
@@ -78,7 +80,7 @@ const bytes = (chunk: Uint8Array | string): Uint8Array =>
   typeof chunk === "string" ? enc.encode(chunk) : chunk;
 
 export function fakeProxy(replies: ProxyReply[]): { fetchFn: FetchFn; log: ProxyLog } {
-  const log: ProxyLog = { urls: [], inits: [], pulled: [] };
+  const log: ProxyLog = { urls: [], inits: [], pulled: [], cancelled: [] };
   const fetchFn: FetchFn = async (input, init) => {
     log.urls.push(input.toString());
     log.inits.push(init);
@@ -86,6 +88,7 @@ export function fakeProxy(replies: ProxyReply[]): { fetchFn: FetchFn; log: Proxy
     const chunks = (reply.chunks ?? []).map(bytes);
     const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
     const slot = log.pulled.push(0) - 1;
+    log.cancelled.push(false);
     let next = 0;
     const body = new ReadableStream<Uint8Array>(
       {
@@ -103,6 +106,9 @@ export function fakeProxy(replies: ProxyReply[]): { fetchFn: FetchFn; log: Proxy
           log.pulled[slot] = (log.pulled[slot] ?? 0) + 1;
           next++;
           controller.enqueue(chunk);
+        },
+        cancel() {
+          log.cancelled[slot] = true;
         },
       },
       { highWaterMark: 0 },

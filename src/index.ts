@@ -1,9 +1,9 @@
-import { unlinkSync } from "node:fs";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import pkg from "../package.json" with { type: "json" };
 import { ConfigError, loadConfig } from "./server/config";
 import { createServerFactory } from "./server/create-server";
 import { prepareDownload } from "./server/download/setup";
+import { installShutdownHandlers } from "./server/download/shutdown";
 
 /** Stdout belongs to the protocol: anything for a human goes to stderr. */
 async function main(): Promise<void> {
@@ -17,21 +17,7 @@ async function main(): Promise<void> {
       process.stderr.write(`mothdex-mcp: ${message}\n`);
     };
     const download = await prepareDownload(process.env, warn);
-    if (download !== undefined) {
-      // A closed stdin aborts the transfer; the exit hook is the last resort for a staging file.
-      const stop = (): void => download.state.shutdown.abort();
-      process.stdin.once("end", stop);
-      process.stdin.once("close", stop);
-      process.once("exit", () => {
-        for (const part of download.state.activeParts) {
-          try {
-            unlinkSync(part);
-          } catch {
-            // already gone
-          }
-        }
-      });
-    }
+    if (download !== undefined) installShutdownHandlers(download.state);
     serveStdio(
       createServerFactory({ config, version: pkg.version, ...(download ? { download } : {}) }),
       {

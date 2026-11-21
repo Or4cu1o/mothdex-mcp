@@ -18,7 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `no_destination`, `untrusted_url`, `unsafe_name`, `size_mismatch`, `path_rejected`, `disk_full`, `busy`,
   `quota_exceeded`. No new runtime dependency. The plugin gets an optional `download_dir` setting (choosing it enables
   downloads) and the `download` skill uses the tool only on an explicit request. Distribution (npm, `.mcpb`,
-  `server.json`) is a separate change.
+  `server.json`) is a separate change. Review fixes: a child named `..x` is no longer taken for a parent in the deny-list,
+  more system roots are denied, a failed write releases the response body, SIGTERM, SIGINT and SIGHUP remove the staging
+  file before exiting, the copy fallback removes a partial final file, and a link error other than the fallback codes is
+  `path_rejected`.
 - Contracts (T-61): the `download_file` empty-name fallback uses the call's staging random part as `jobID`, and the shared `sanitize-vectors.json` fixture (mothdex-cli e8f79f6) applies as written, except that `allow_executable` vectors give `unsafe_name`.
 - Contracts (T-61): `download_file` in tools.md §3 (registration, destination, input, link and transfer rules, staging and no-replace finalize, budgets, output, error codes, tests) and v0.2 distribution in plugin.md §5 (folder-as-opt-in, npm package rules, release order with trusted publishing, `.mcpb` and `server.json`), from Sentinela's T-60 CRs and D26.
 - `docs/release.md`: owner checklist for the first release v0.1.0 (gates, settings, prepare PR, tag, verification of the

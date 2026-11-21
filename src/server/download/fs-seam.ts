@@ -29,6 +29,7 @@ export interface DownloadFs {
   lstat(path: string): Promise<StatLike>;
   open(path: string, flags: number, mode: number): Promise<HandleLike>;
   link(existing: string, created: string): Promise<void>;
+  /** Creates `target` exclusively (never replacing) and copies `source` into it; a failed copy leaves no `target`. */
   copyFileExcl(source: string, target: string): Promise<void>;
   unlink(path: string): Promise<void>;
   readdir(path: string): Promise<string[]>;
@@ -44,7 +45,7 @@ export const realFs: DownloadFs = {
   lstat: (path) => fsp.lstat(path),
   open: (path, flags, mode) => fsp.open(path, flags, mode),
   link: (existing, created) => fsp.link(existing, created),
-  copyFileExcl: (source, target) => fsp.copyFile(source, target, fs.constants.COPYFILE_EXCL),
+  copyFileExcl: (source, target) => copyExclusive(source, target),
   unlink: (path) => fsp.unlink(path),
   readdir: (path) => fsp.readdir(path),
   freeBytes: async (path) => {
@@ -64,3 +65,46 @@ export const STAGING_FLAGS =
   fs.constants.O_CREAT |
   fs.constants.O_EXCL |
   ((fs.constants as Record<string, number | undefined>).O_NOFOLLOW ?? 0);
+
+const CHUNK_BYTES = 1024 * 1024;
+
+/**
+ * Exclusive copy: the target is created with `O_EXCL` (and `O_NOFOLLOW` where the OS has it), so an
+ * existing name, also a dangling symlink, is `EEXIST` and is never touched. When the copy fails after
+ * that point (ENOSPC, EIO) the partial target is removed, because this call created it. `onChunk`
+ * lets a test make a copy fail midway.
+ */
+export async function copyExclusive(
+  source: string,
+  target: string,
+  onChunk: (written: number) => void = () => {},
+): Promise<void> {
+  const input = await fsp.open(source, "r");
+  try {
+    const mode = (await input.stat()).mode & 0o777;
+    const output = await fsp.open(target, STAGING_FLAGS, mode); // EEXIST: nothing was created
+    try {
+      const buffer = Buffer.allocUnsafe(CHUNK_BYTES);
+      let written = 0;
+      for (;;) {
+        const { bytesRead } = await input.read(buffer, 0, CHUNK_BYTES, null);
+        if (bytesRead === 0) break;
+        let offset = 0;
+        while (offset < bytesRead) {
+          offset += (await output.write(buffer, offset, bytesRead - offset)).bytesWritten;
+        }
+        written += bytesRead;
+        onChunk(written);
+      }
+      await output.sync();
+      await output.chmod(mode); // the open mode is subject to the umask; the part already carried the final one
+    } catch (error) {
+      await output.close().catch(() => undefined);
+      await fsp.unlink(target).catch(() => undefined);
+      throw error;
+    }
+    await output.close();
+  } finally {
+    await input.close();
+  }
+}

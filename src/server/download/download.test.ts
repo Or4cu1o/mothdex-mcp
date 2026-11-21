@@ -191,8 +191,31 @@ describe("destination deny-list (case 3)", () => {
     ["a launcher folder ports", under("games", "roms", "ports")],
     ["ports_scripts", under("games", "PORTS_SCRIPTS")],
     ["roms\\windows", under("games", "roms", "windows")],
+    ["a child named with two dots inside ~/.ssh", `${home}${sep}.ssh${sep}..keys`],
+    [
+      "a child named with two dots inside the plugin folder",
+      `${ctx.env.CLAUDE_PLUGIN_ROOT}${sep}..x`,
+    ],
   ])("refuses %s", (_label, target) => {
     expect(denyReason(target, home, ctx)).toBeDefined();
+  });
+
+  it.skipIf(!posix)("refuses /etc/..x and the extra POSIX roots", () => {
+    for (const target of [
+      "/etc/..x",
+      "/var/spool/cron",
+      "/opt/tool",
+      "/dev/shm",
+      "/proc/1",
+      "/sys/x",
+      "/run/user",
+    ]) {
+      expect(denyReason(target, home, ctx), target).toBeDefined();
+    }
+  });
+
+  it("a sibling that only shares a prefix is not inside the protected folder", () => {
+    expect(denyReason(`${home}${sep}.sshx`, home, ctx)).toBeUndefined();
   });
 
   it("accepts an ordinary folder", () => {
@@ -502,6 +525,21 @@ describe("filesystem (cases 12-19)", () => {
     expect(fs.readFileSync(path.join(r.dir, "Game.zip"), "utf8")).toBe("raced");
   });
 
+  it.each(["EACCES", "EIO"])(
+    "a link error %s (not EEXIST, not a no-link code) is path_rejected, not internal",
+    async (code) => {
+      const r = rig({
+        fs: {
+          link: async () => {
+            throw Object.assign(new Error("x"), { code });
+          },
+        },
+      });
+      expect(await failure(r.run())).toBe("path_rejected");
+      expect(r.files()).toEqual([]);
+    },
+  );
+
   it("case 19: the file system seam has no rename, so the final name is never made by one", () => {
     expect(Object.keys(realFs)).not.toContain("rename");
   });
@@ -658,6 +696,7 @@ describe("limits, concurrency, lifecycle (cases 30-36)", () => {
     expect(await failure(r.run())).toBe("disk_full");
     expect(r.files()).toEqual([]);
     expect(r.rt.state.ledger).toBe(0n);
+    expect(r.proxy.cancelled[0]).toBe(true); // the body and its connection were released
   });
 
   it("case 31: a second call while one runs is busy (retryable) at once; the slot is free afterwards", async () => {
@@ -723,6 +762,7 @@ describe("limits, concurrency, lifecycle (cases 30-36)", () => {
       replies: [{ chunks: ["01234", "56789"], onChunk: (index) => index === 1 && abort.abort() }],
     });
     expect(await failure(r.run({}, abort.signal))).toBe("canceled");
+    expect(r.proxy.inits[0]?.signal?.aborted).toBe(true); // the abort reached the fetch, which tears the body down
     expect(r.files()).toEqual([]);
     expect(r.rt.state.tryAcquire()).toBe(true);
   });
