@@ -185,8 +185,12 @@ The steps of one call, in order. Any failure stops the call; the error codes are
 2. **Host.** `isTrustedHost(url, MOTHDEX_ALLOWED_HOSTS)` **and** a URL host exactly `proxy.mothdex.net`, whatever `MOTHDEX_ALLOWED_HOSTS` says (D16, until E-v0.2-hosts).
    - Otherwise `untrusted_url`, and no connection is opened.
 3. **Size.** `link.size` must be a safe integer, at least 1, and at most the per-file cap. Otherwise `invalid_request`, and no connection is opened.
-4. **Name.** `Sanitize(link.filename)` is a byte-exact TS port of mothdex-cli downloader.md §6.1 (T-16 §5): the same steps, the same 200-byte limit, the same empty-name fallback `Sanitize(slug).format`.
-   - It checks against the shared fixture `sanitize-vectors.json` (gap F-1), copied into `src/server/testdata/`. `scripts/check-fixtures.mjs` fails CI on divergence.
+4. **Name.** `Sanitize(link.filename)` is a byte-exact TS port of mothdex-cli downloader.md §6.1 (T-16 §5): the same steps, the same 200-byte limit, the same empty-name fallback: `Sanitize(slug).format`, then `download-<jobID>`. In MCP, `jobID` is the 26-character
+   base32 random part of the call's staging name (§3.5).
+   - It checks against the shared fixture `sanitize-vectors.json` (F-1, mothdex-cli `internal/proxy/testdata/`, e8f79f6),
+     copied into `src/server/testdata/`. `scripts/check-fixtures.mjs` fails CI on divergence. Every vector applies as
+     written, except one: a vector with `allow_executable: true` must give `unsafe_name` in MCP, because MCP has no
+     override.
    - The executable deny-list of §6.1 item 8 has **no override** in MCP: a match is `unsafe_name`. The extension never comes from `Content-Type`.
 5. **Reservation.** The name is reserved in process, keyed by `NFC(name).toLowerCase()` with full Unicode case folding (CR-7).
    - It is held until the call ends.
@@ -315,7 +319,7 @@ T-60 §6 cases 1-39 are the required test list for Bigorna's PR. Case 6 is dropp
 
 ### 3.10 Dependencies and open items
 
-- **F-1 (Forja, mothdex-cli, blocks §3.4 step 4):** export the `Sanitize` test vectors from `internal/proxy/sanitize_test.go`
+- **F-1 (Forja, done in mothdex-cli e8f79f6, PR #67):** export the `Sanitize` test vectors from `internal/proxy/sanitize_test.go`
   to `internal/proxy/testdata/sanitize-vectors.json` (input, output or error), read by the Go test itself, so both
   repos test the same table. `scripts/check-fixtures.mjs` gains that file.
 - **Skills (Bigorna):** the `mothdex` skill and `skills/download` get the explicit-intent rule of §3.3; `skills/download`
