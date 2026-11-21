@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Contracts (T-61): `download_file` in tools.md §3 (registration, destination, input, link and transfer rules, staging and no-replace finalize, budgets, output, error codes, tests) and v0.2 distribution in plugin.md §5 (folder-as-opt-in, npm package rules, release order with trusted publishing, `.mcpb` and `server.json`), from Sentinela's T-60 CRs and D26.
 - `docs/release.md`: owner checklist for the first release v0.1.0 (gates, settings, prepare PR, tag, verification of the
   published assets, marketplace pin, rollback) and what was not verified yet (T-23).
 - T-60: threat model for the `download_file` tool and the v0.2.0 distribution (`docs/security/`), by Sentinela. It sets
