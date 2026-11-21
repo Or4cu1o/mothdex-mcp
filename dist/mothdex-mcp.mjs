@@ -24264,6 +24264,13 @@ var systemSchedule = (ms, fire) => {
 };
 var FIRST_BYTE_TIMEOUT_MS = 10 * 6e4;
 var IDLE_TIMEOUT_MS = 5 * 6e4;
+var BAND_FLOOR = 256n * 1024n * 1024n;
+var clUpperBand = (size) => 4n * BigInt(size) + BAND_FLOOR;
+function parseLength(header) {
+  if (header === null || !/^[1-9][0-9]*$/.test(header)) return void 0;
+  const value = Number(header);
+  return Number.isSafeInteger(value) ? value : void 0;
+}
 var REDIRECTS = /* @__PURE__ */ new Set([301, 302, 303, 307, 308]);
 async function writeAll(handle, chunk) {
   let offset = 0;
@@ -24307,11 +24314,15 @@ async function transfer(options) {
     if (encoding !== null && encoding.trim().toLowerCase() !== "identity") {
       return await refuse("size_mismatch");
     }
-    const declared = response.headers.get("content-length");
-    if (declared === null || !/^[0-9]+$/.test(declared) || Number(declared) !== size) {
-      return await refuse("size_mismatch");
-    }
+    const cl = parseLength(response.headers.get("content-length"));
+    if (cl === void 0 || BigInt(cl) > clUpperBand(size)) return await refuse("size_mismatch");
     if (response.body === null) return await refuse("size_mismatch");
+    try {
+      await options.onLength(cl);
+    } catch (error2) {
+      await response.body.cancel().catch(() => void 0);
+      throw error2;
+    }
     const reader = response.body.getReader();
     const hash = createHash("sha256");
     let bytes = 0;
@@ -24322,13 +24333,13 @@ async function transfer(options) {
         disarm();
         disarm = arm(options.idleMs ?? IDLE_TIMEOUT_MS);
         bytes += value.byteLength;
-        if (bytes > size) {
+        if (bytes > cl) {
           await reader.cancel().catch(() => void 0);
           throw new DownloadFailure("size_mismatch");
         }
         hash.update(value);
         await writeAll(handle, value);
-        options.onProgress(bytes);
+        options.onProgress(bytes, cl);
       }
     } catch (error2) {
       await reader.cancel().catch(() => void 0);
@@ -24336,7 +24347,7 @@ async function transfer(options) {
       if (options.signal.aborted || timedOut) throw failed();
       throw error2;
     }
-    if (bytes !== size) throw new DownloadFailure("size_mismatch");
+    if (bytes !== cl) throw new DownloadFailure("size_mismatch");
     return { bytes, sha256: hash.digest("hex") };
   } finally {
     disarm();
@@ -24425,7 +24436,7 @@ var existsResult = (target) => ({
   crc: "skipped"
 });
 var maxBig = (a, b) => a > b ? a : b;
-async function ensureSpace(rt, dest, size) {
+async function ensureSpace(rt, dest, size, held = 0n) {
   const bytes = BigInt(size);
   const fivePercent = bytes / 20n;
   const floor = 256n * MIB;
@@ -24433,7 +24444,7 @@ async function ensureSpace(rt, dest, size) {
   const free = await rt.fs.freeBytes(dest).catch((error2) => {
     throw new DownloadFailure("disk_full", codeOf(error2));
   });
-  if (free - rt.state.ledger < bytes + margin)
+  if (free - (rt.state.ledger - held) < bytes + margin)
     throw new DownloadFailure("disk_full", "not enough free space");
   return 2n * bytes;
 }
@@ -24477,11 +24488,22 @@ async function runDownload(rt, env, args, onProgress) {
     const result = await transfer({
       url: url2,
       size,
+      onLength: async (cl) => {
+        if (cl > rt.limits.fileBytes) throw new DownloadFailure("size_mismatch");
+        if (!state.chargeLength(size, cl, rt.limits)) throw new DownloadFailure("quota_exceeded");
+        const claim2 = await ensureSpace(rt, dest, cl, reservedBytes);
+        state.releaseBytes(reservedBytes);
+        reservedBytes = claim2;
+        state.reserveBytes(claim2);
+        if (cl * 2 > size * 3 || cl * 2 < size) {
+          rt.log(`download ${jobId} size drift: link ${size}, content-length ${cl}`);
+        }
+      },
       fetchFn: rt.fetchFn,
       schedule: rt.schedule,
       signal,
       handle,
-      onProgress: (bytes) => onProgress(bytes, size),
+      onProgress,
       ...rt.firstByteMs === void 0 ? {} : { firstByteMs: rt.firstByteMs },
       ...rt.idleMs === void 0 ? {} : { idleMs: rt.idleMs }
     });
@@ -24951,6 +24973,15 @@ var DownloadState = class {
   noteStarted(size) {
     this.#started++;
     this.#bytesStarted += size;
+  }
+  /**
+   * Swaps the started charge of `estimate` (`link.size`) for the real length `cl` (T-27). False, and
+   * no change, when `cl` would cross the total-bytes budget.
+   */
+  chargeLength(estimate, cl, limits) {
+    if (this.#bytesStarted - estimate + cl > limits.totalBytes) return false;
+    this.#bytesStarted += cl - estimate;
+    return true;
   }
   noteCompleted() {
     this.#completed++;
