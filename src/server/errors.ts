@@ -9,6 +9,8 @@ export type ToolErrorCode =
   | "upstream"
   | "api_incompatible"
   | "untrusted_redirect"
+  /** The client cancelled the request (notifications/cancelled); normally never sent. */
+  | "canceled"
   /** A bug on our side (cli-output.md §4 `internal`); not in the tools.md list yet. */
   | "internal";
 
@@ -28,9 +30,9 @@ export class InvalidRequest extends Error {
 }
 
 /**
- * Client kinds to tool codes. "api" (an `info.error` the client cannot place) is the service
- * failing, "decode" is an answer that is not API v1, and "canceled" never reaches the caller, who
- * cancelled: it is reported as a retryable network failure.
+ * Client kinds to tool codes (tools.md "Errors"). "api" (an `info.error` the client cannot place)
+ * is the service failing but not worth retrying, "decode" is an answer that is not API v1, and
+ * "canceled" is a cancel from the client; a server-side deadline already surfaces as "network".
  */
 const CODES: Readonly<Record<ErrorKind, ToolErrorCode>> = {
   network: "network",
@@ -41,11 +43,11 @@ const CODES: Readonly<Record<ErrorKind, ToolErrorCode>> = {
   decode: "api_incompatible",
   api_incompatible: "api_incompatible",
   rate_limited: "rate_limited",
-  canceled: "network",
+  canceled: "canceled",
   untrusted_redirect: "untrusted_redirect",
 };
 
-const RETRYABLE: ReadonlySet<ToolErrorCode> = new Set(["network", "upstream", "rate_limited"]);
+const RETRYABLE: ReadonlySet<ErrorKind> = new Set(["network", "upstream", "rate_limited"]);
 
 /** Never leaks a stack trace or a cause: only the client's already cleaned message. */
 export function toToolError(error: unknown): ToolError {
@@ -61,7 +63,7 @@ export function toToolError(error: unknown): ToolError {
     return {
       code,
       message: error.message,
-      retryable: RETRYABLE.has(code),
+      retryable: RETRYABLE.has(error.kind),
       ...(retryAfterS === undefined ? {} : { retryAfterS }),
     };
   }

@@ -5,7 +5,7 @@ await build({
   outfile: "dist/mothdex-mcp.mjs",
   bundle: true,
   platform: "node",
-  target: "node24",
+  target: "node22",
   format: "esm",
   sourcemap: false,
   logLevel: "info",

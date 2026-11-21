@@ -3,7 +3,7 @@
 [![CI](https://github.com/Or4cu1o/mothdex-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Or4cu1o/mothdex-mcp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Or4cu1o/mothdex-mcp?include_prereleases)](https://github.com/Or4cu1o/mothdex-mcp/releases)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D24-339933)](package.json)
+[![Node](https://img.shields.io/badge/node-%3E%3D22-339933)](package.json)
 
 [Model Context Protocol](https://modelcontextprotocol.io) server for the
 [Mothdex](https://api.mothdex.net) API.

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Node floor is 22 (`engines`, esbuild target `node22`), the oldest LTS still supported; the tools contract says so.
 - A redirect the API client refuses (another origin, a scheme or port change, more than 3 hops) is now the
   non-retryable error kind `untrusted_redirect` instead of `network`; the message names only the target host.
 - Tools contract: a refused redirect is the non-retryable error code `untrusted_redirect`, never `network`.

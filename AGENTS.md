@@ -8,10 +8,9 @@ Guidance for humans and coding agents working in this repository.
 pre-alpha skeleton. The MCP SDK is not a dependency yet. Plugin packaging
 (`.claude-plugin/`, `.mcp.json`, `skills/`) is not part of the skeleton.
 
-Node baseline: `engines.node >=24` and the esbuild target `node24` (Node 24 and 26 are LTS lines;
-`.node-version` and CI use 26). The MCP SDK needs Node >=20, so it does not raise the floor. The tools contract
-says Node >=20; whether to lower our floor to match is Alicerce's decision (T-31 left it at 24). `@types/node` 26 can
-expose APIs missing on Node 24, so keep the minimum and the types aligned when it changes.
+Node baseline: `engines.node >=22` and the esbuild target `node22` (the oldest LTS still supported; Node 20 is end
+of life; tools.md decision). CI and `.node-version` use 26. `@types/node` 26 can expose APIs missing on Node 22, so
+keep the minimum and the types aligned when it changes and avoid APIs newer than Node 22.
 
 ## Commands
 
