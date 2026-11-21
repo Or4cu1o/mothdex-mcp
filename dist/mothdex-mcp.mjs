@@ -24490,8 +24490,9 @@ async function runDownload(rt, env, args, onProgress) {
       size,
       onLength: async (cl) => {
         if (cl > rt.limits.fileBytes) throw new DownloadFailure("size_mismatch");
-        if (!state.chargeLength(size, cl, rt.limits)) throw new DownloadFailure("quota_exceeded");
+        if (!state.lengthFits(size, cl, rt.limits)) throw new DownloadFailure("quota_exceeded");
         const claim2 = await ensureSpace(rt, dest, cl, reservedBytes);
+        state.chargeLength(size, cl);
         state.releaseBytes(reservedBytes);
         reservedBytes = claim2;
         state.reserveBytes(claim2);
@@ -24974,14 +24975,13 @@ var DownloadState = class {
     this.#started++;
     this.#bytesStarted += size;
   }
-  /**
-   * Swaps the started charge of `estimate` (`link.size`) for the real length `cl` (T-27). False, and
-   * no change, when `cl` would cross the total-bytes budget.
-   */
-  chargeLength(estimate, cl, limits) {
-    if (this.#bytesStarted - estimate + cl > limits.totalBytes) return false;
+  /** True when swapping the started charge of `estimate` (`link.size`) for `cl` stays inside the total-bytes budget. */
+  lengthFits(estimate, cl, limits) {
+    return this.#bytesStarted - estimate + cl <= limits.totalBytes;
+  }
+  /** Swaps the started charge of `estimate` for the real length `cl` (T-27), after `lengthFits` and the space check passed. */
+  chargeLength(estimate, cl) {
     this.#bytesStarted += cl - estimate;
-    return true;
   }
   noteCompleted() {
     this.#completed++;

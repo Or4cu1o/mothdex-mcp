@@ -56,14 +56,14 @@ export class DownloadState {
     this.#bytesStarted += size;
   }
 
-  /**
-   * Swaps the started charge of `estimate` (`link.size`) for the real length `cl` (T-27). False, and
-   * no change, when `cl` would cross the total-bytes budget.
-   */
-  chargeLength(estimate: number, cl: number, limits: DownloadLimits): boolean {
-    if (this.#bytesStarted - estimate + cl > limits.totalBytes) return false;
+  /** True when swapping the started charge of `estimate` (`link.size`) for `cl` stays inside the total-bytes budget. */
+  lengthFits(estimate: number, cl: number, limits: DownloadLimits): boolean {
+    return this.#bytesStarted - estimate + cl <= limits.totalBytes;
+  }
+
+  /** Swaps the started charge of `estimate` for the real length `cl` (T-27), after `lengthFits` and the space check passed. */
+  chargeLength(estimate: number, cl: number): void {
     this.#bytesStarted += cl - estimate;
-    return true;
   }
 
   noteCompleted(): void {

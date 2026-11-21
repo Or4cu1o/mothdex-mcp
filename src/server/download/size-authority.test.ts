@@ -154,6 +154,8 @@ describe("Content-Length as the size authority (T-27)", () => {
     expect(r.proxy.cancelled[0]).toBe(true);
     expect(r.rt.state.ledger).toBe(0n);
     expect(r.files()).toEqual([]);
+    // The failed call stays charged with the estimate (10), not cl (1 MiB): the budget is not burnt.
+    expect(r.rt.state.lengthFits(10, 10, { ...r.rt.limits, totalBytes: 10 })).toBe(true);
   });
 
   it("case 32: link.size fits the remaining budget but cl does not: quota_exceeded after the headers, body unread", async () => {

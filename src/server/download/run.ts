@@ -218,9 +218,11 @@ export async function runDownload(
       onLength: async (cl) => {
         // The size authority is Content-Length (T-27): caps, budget and space run again on it, before the body.
         if (cl > rt.limits.fileBytes) throw new DownloadFailure("size_mismatch");
-        if (!state.chargeLength(size, cl, rt.limits)) throw new DownloadFailure("quota_exceeded");
+        if (!state.lengthFits(size, cl, rt.limits)) throw new DownloadFailure("quota_exceeded");
         const claim = await ensureSpace(rt, dest, cl, reservedBytes);
         // One synchronous step: nothing else runs between releasing the old claim and taking the new one.
+        // The budget is charged only now, so a call that fails disk_full leaves it at the estimate.
+        state.chargeLength(size, cl);
         state.releaseBytes(reservedBytes);
         reservedBytes = claim;
         state.reserveBytes(claim);
