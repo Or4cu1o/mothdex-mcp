@@ -5,9 +5,10 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { toToolError } from "../errors";
-import { realFs } from "./fs-seam";
+import { denyReason } from "./destination";
+import { copyExclusive, realFs } from "./fs-seam";
 import { prepareDownload } from "./setup";
 import { makeRig, type Rig } from "./test-kit";
 
@@ -91,23 +92,92 @@ describe("case 25: the transfer stops at byte size+1", () => {
 });
 
 describe("case 20: the final mode honors the user's umask", () => {
+  // run.ts reads the umask once, when it loads: reload the modules under each umask, as a server
+  // started by a user with that umask would see it.
   it.skipIf(process.platform === "win32")(
-    "a strict umask gives 0600 and the usual one 0644, whatever the process umask was",
+    "a strict umask gives 0600, 0027 gives 0640 and the usual one 0644",
     async () => {
       const modeUnder = async (mask: number): Promise<number> => {
         const before = process.umask(mask);
         try {
-          const rig = makeRig({});
+          vi.resetModules();
+          const kit = await import("./test-kit");
+          const rig = kit.makeRig({});
           rigs.push(rig);
           const result = await rig.run();
           return fs.statSync(result.path).mode & 0o777;
         } finally {
           process.umask(before);
+          vi.resetModules();
         }
       };
       expect(await modeUnder(0o077)).toBe(0o600);
       expect(await modeUnder(0o027)).toBe(0o640);
       expect(await modeUnder(0o022)).toBe(0o644);
+    },
+  );
+});
+
+describe("case 3: the /run roots that hold system state stay denied", () => {
+  const ctx = { platform: "linux" as const, env: {} };
+  it.each(["/run/user/1000/x", "/run/systemd/x", "/run/dbus/x", "/run/lock/x"])(
+    "refuses %s",
+    (target) => {
+      expect(denyReason(target, "/home/u", ctx), target).toBeDefined();
+    },
+  );
+});
+
+describe("case 34: the copy fallback is registered for signal cleanup in the real flow", () => {
+  it.skipIf(process.platform === "win32")(
+    "run.ts hands the active set down to the copy, which holds the final name while writing",
+    async () => {
+      let registeredWhileCopying = false;
+      const rig = makeRig({
+        fs: {
+          link: async () => {
+            throw Object.assign(new Error("no hard links here"), { code: "EPERM" });
+          },
+          copyFileExcl: (source, target, active) =>
+            copyExclusive(
+              source,
+              target,
+              () => {
+                registeredWhileCopying = active?.has(target) === true;
+              },
+              active,
+            ),
+        },
+      });
+      rigs.push(rig);
+      const result = await rig.run();
+      expect(result.status).toBe("done");
+      expect(registeredWhileCopying).toBe(true);
+      expect(rig.rt.state.activeParts.size).toBe(0);
+    },
+  );
+  it.skipIf(process.platform === "win32")(
+    "the real copy seam registers the final name too, not only the staging file",
+    async () => {
+      const rig = makeRig({
+        fs: {
+          link: async () => {
+            throw Object.assign(new Error("no hard links here"), { code: "EXDEV" });
+          },
+        },
+      });
+      rigs.push(rig);
+      const added: string[] = [];
+      const active = rig.rt.state.activeParts;
+      const add = active.add.bind(active);
+      active.add = (value: string) => {
+        added.push(value);
+        return add(value);
+      };
+      const result = await rig.run();
+      expect(result.status).toBe("done");
+      expect(added).toContain(result.path);
+      expect(active.size).toBe(0);
     },
   );
 });
