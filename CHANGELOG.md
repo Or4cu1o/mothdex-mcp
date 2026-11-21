@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - T-32: contract tests of `docs/contracts/mcp/tools.md` through a real MCP client (the seven tools, the error table including `canceled` and `internal`, `isError` with `structuredContent`, resources, prompts, annotations, input limits) and a stdio smoke test of the built server (`pnpm smoke`, CI job `stdio smoke`) against a local fake API.
+- `search_entries` writes one stderr line when it drops entries whose slug is unsafe (no API text in it).
 - Claude Code plugin and marketplace (the repository is both): `.claude-plugin/plugin.json` and `marketplace.json`,
   `.mcp.json` pointing at the bundled `dist/mothdex-mcp.mjs`, and skills `mothdex` (model-invoked),
   `/mothdex:search`, `/mothdex:random` and `/mothdex:download` (resolves links, never downloads). A `plugin` CI job

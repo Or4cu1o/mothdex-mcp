@@ -45,8 +45,8 @@ server would not start. Once released:
 It runs the bundled `dist/mothdex-mcp.mjs` with `node` from your PATH (Node 22 or later) and adds the skills `/mothdex:search`, `/mothdex:random` and
 `/mothdex:download`.
 
-To try it locally, clone the repository, run `pnpm install --frozen-lockfile` and `pnpm build`, then in Claude Code
-`claude plugin marketplace add ./` and `/plugin install mothdex@mothdex-mcp`.
+To try it locally, clone the repository, run `pnpm install --frozen-lockfile` and `pnpm build`, then, inside Claude Code,
+`/plugin marketplace add ./` and `/plugin install mothdex@mothdex-mcp`.
 
 ## Develop
 
