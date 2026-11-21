@@ -5,7 +5,7 @@ Plugin packaging (`.claude-plugin/`, `.mcp.json`, `.mcpb`, `server.json`) is **p
 
 ## 1. Ground rules
 
-- **SDK v2:** `@modelcontextprotocol/server` **2.4.0** (exact pin), zod ≥ 4.2 (`import * as z from 'zod/v4'`), Node ≥ 20,
+- **SDK v2:** `@modelcontextprotocol/server` **2.4.0** (exact pin), zod ≥ 4.2 (`import * as z from 'zod/v4'`), Node ≥ 22 (oldest LTS still supported; `engines` matches),
   ESM bundle (PLAN §9). Wiring: `serveStdio(() => { const s = new McpServer({name: 'mothdex', version}); …; return s; })`
   from `@modelcontextprotocol/server/stdio`. Registration only through `registerTool(name, {title, description,
   inputSchema: z.object(…), outputSchema: z.object(…), annotations}, cb)`, `registerResource(name, uriOrTemplate, metadata, cb)`
@@ -27,7 +27,23 @@ Plugin packaging (`.claude-plugin/`, `.mcp.json`, `.mcpb`, `server.json`) is **p
 
 A tool failure returns `isError: true` with `structuredContent: {error: {code, message, retryable, retry_after_s?}}`,
 where `code` comes from [`cli-output.md`](https://github.com/Or4cu1o/mothdex-cli/blob/main/docs/contracts/cli/cli-output.md) (mothdex-cli) §4 (`not_found`, `invalid_request`, `rate_limited`, `network`, `upstream`,
-`api_incompatible`, `untrusted_redirect`). Input validation failures are `invalid_request` and never reach the API.
+`api_incompatible`, `untrusted_redirect`, `canceled`, `internal`). Input validation failures are `invalid_request` and never reach the API.
+
+| Client kind (api-client)                             | `code`                                               | `retryable`                           |
+| ---------------------------------------------------- | ---------------------------------------------------- | ------------------------------------- |
+| `NotFound`                                           | `not_found`                                          | false                                 |
+| `InvalidRequest`                                     | `invalid_request`                                    | false                                 |
+| `RateLimited`                                        | `rate_limited`                                       | true, with `retry_after_s` when known |
+| `Network`                                            | `network`                                            | true                                  |
+| `Upstream`                                           | `upstream`                                           | true                                  |
+| `API` (unknown `info.error`)                         | `upstream`                                           | false                                 |
+| `Decode`                                             | `api_incompatible`                                   | false                                 |
+| `Incompatible`                                       | `api_incompatible`                                   | false                                 |
+| `UntrustedRedirect`                                  | `untrusted_redirect`                                 | false                                 |
+| `Canceled` by the client (`notifications/cancelled`) | `canceled` (normally not sent)                       | false                                 |
+| `Canceled` by a server-side deadline                 | `network`                                            | true                                  |
+| anything unexpected                                  | `internal` (message generic, detail only in the log) | false                                 |
+
 A redirect the client refuses (another origin, a scheme change or more than 3 hops; api-client §5.1) is
 `untrusted_redirect` with `retryable: false`, never `network`.
 
@@ -83,7 +99,7 @@ type DownloadLink = LinkSummary & {
 
 - `index` is 1-based and stable for a given entry (API order). `resolve_download` with `link_index` returns that one link.
 - `trusted_host` is false when the URL host is outside `MOTHDEX_ALLOWED_HOSTS`. The tool still returns the link,
-  flagged, and the skill tells the model not to recommend it.
+  flagged, and the skill tells the model not to recommend it. Trusted links come first; the ranking order is kept within each group.
 - `resolve_download` downloads nothing. It is how a user gets a URL for their own browser or the CLI.
 
 ## 3. Write tool: `download_file`, **future, opt-in (M3')**
