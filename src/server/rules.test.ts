@@ -8,6 +8,7 @@ import { loadConfig } from "./config";
 import { InvalidRequest, toToolError } from "./errors";
 import { isTrustedHost, rankLinks } from "./links";
 import { parseMaxItems } from "./prompts";
+import { Slug } from "./schemas";
 
 const link = (over: Partial<Link> & { url?: string }): Link => ({
   type: "Game",
@@ -181,5 +182,24 @@ describe("parseMaxItems", () => {
     ["7", 7],
   ])("%s -> %s", (raw, expected) => {
     expect(parseMaxItems(raw)).toBe(expected);
+  });
+});
+
+describe("Slug input rule", () => {
+  it.each([
+    ["doom-1993-dos", true],
+    ["a", true],
+    ["0-day", true],
+    ["a".repeat(256), true],
+    ["", false],
+    ["-lead", false],
+    ["Upper", false],
+    ["a b", false],
+    ["a/b", false],
+    ["a;rm", false],
+    ["a%2Fb", false],
+    ["a".repeat(257), false],
+  ])("%j is accepted: %s", (slug, ok) => {
+    expect(Slug.safeParse(slug).success).toBe(ok);
   });
 });
