@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Contracts: tools follow the shared slug rule (`^[a-z0-9][a-z0-9-]{0,255}$`, api-client §2 in mothdex-cli). An unsafe
+  slug in input is `invalid_request`, search drops such results with a warning, and a single-entry answer is
+  `api_incompatible`.
 - `dist/mothdex-mcp.mjs` is committed (a plugin git install now has its bundle) and excluded from lint. Version is
   `0.1.0` in `package.json` and `plugin.json` (not tagged yet).
 - Node floor is 22 (`engines`, esbuild target `node22`), the oldest LTS still supported; the tools contract says so.
