@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SIGNER_WORKFLOW: Or4cu1o/mothdex-mcp/.github/workflows/release.yml
+  SIGNER_WORKFLOW: ${{ github.repository }}/.github/workflows/release.yml
 
 jobs:
   build:
@@ -69,6 +69,10 @@ jobs:
           cp dist/mothdex-mcp.mjs "release/mothdex-mcp_${TAG#v}.mjs"
           (cd release && sha256sum "mothdex-mcp_${TAG#v}.mjs" > checksums.txt)
           cat release/checksums.txt
+      - name: Smoke the staged release file
+        env:
+          TAG: ${{ github.ref_name }}
+        run: node scripts/smoke-stdio.mjs "release/mothdex-mcp_${TAG#v}.mjs"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-files
@@ -115,7 +119,22 @@ jobs:
       - name: Verify checksums before publishing
         working-directory: release
         run: sha256sum --check --strict checksums.txt
-      - name: Verify attestations (signer workflow and tag) before publishing
+      - name: The tag still points at the commit that was built
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Resolve the tag through annotated tag objects to a commit; it must be the commit this run built.
+          type=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.type)
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha)
+          for _ in 1 2 3; do
+            [ "$type" = "tag" ] || break
+            type=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq .object.type)
+            sha=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq .object.sha)
+          done
+          [ "$type" = "commit" ] || { echo "tag $TAG does not resolve to a commit"; exit 1; }
+          [ "$sha" = "$GITHUB_SHA" ] || { echo "tag $TAG moved: it is at $sha, this run built $GITHUB_SHA"; exit 1; }
+      - name: Verify attestations (signer workflow, tag and commit) before publishing
         working-directory: release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -123,7 +142,8 @@ jobs:
         run: |
           for f in checksums.txt $(awk '{print $2}' checksums.txt); do
             gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
-              --signer-workflow "$SIGNER_WORKFLOW" --source-ref "refs/tags/$TAG"
+              --signer-workflow "$SIGNER_WORKFLOW" --source-ref "refs/tags/$TAG" \
+              --source-digest "$GITHUB_SHA" --deny-self-hosted-runners
           done
       - name: Create the release
         working-directory: release

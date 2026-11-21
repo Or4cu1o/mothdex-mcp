@@ -1,14 +1,18 @@
 // Stdio smoke test of the BUILT server (T-32): spawn dist/mothdex-mcp.mjs, initialize, list the
 // tools, make one successful and one failing call against a local fake API, and require that
 // stdout carries nothing but JSON-RPC messages. No network beyond 127.0.0.1, no live API.
-// Run `pnpm build` first.
+// Run `pnpm build` first. An optional argument names another bundle to test (the release job smokes the staged asset).
 import { spawn, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
-const SERVER = fileURLToPath(new URL("../dist/mothdex-mcp.mjs", import.meta.url));
+const SERVER =
+  process.argv[2] === undefined
+    ? fileURLToPath(new URL("../dist/mothdex-mcp.mjs", import.meta.url))
+    : resolve(process.argv[2]);
 const INFO = readFileSync(new URL("../src/api/testdata/api-v1/info.json", import.meta.url), "utf8");
 const VERSION = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),

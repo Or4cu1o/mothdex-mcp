@@ -5,8 +5,11 @@ Sources: [T1c research](../../research/T1c-claude-code-plugin.md) (Claude Code 2
 
 ## 1. Decisions
 
-- The repo is **both marketplace and plugin** (`source: "./"`). Users run `/plugin marketplace add Or4cu1o/mothdex-mcp`,
-  then `/plugin install mothdex@mothdex-mcp`.
+- The repo is **both marketplace and plugin**. The marketplace entry has two states: before the first release it is
+  `source: "./"` (the plugin is the checkout, so it follows `main` HEAD); from the first release it is pinned to a
+  release, `source: { "source": "github", "repo": "Or4cu1o/mothdex-mcp", "ref": "vX.Y.Z", "sha": "<tag commit>" }`
+  ([docs/release.md](../../release.md) step 3). Users run `/plugin marketplace add Or4cu1o/mothdex-mcp`, then
+  `/plugin install mothdex@mothdex-mcp`; once pinned they get exactly the attested tag, not `main`.
 - The MCP server runs from a **committed, bundled** `dist/mothdex-mcp.mjs` (esbuild, no `node_modules`), built at release.
   Not `npx`, which would need network and npm at startup and adds supply-chain exposure (T1c option D).
 - **`skills/` only.** `commands/` is legacy in Claude Code (PLAN §9). Plugin skills already appear as `/mothdex:<skill>`.
@@ -22,6 +25,7 @@ mothdex-mcp/
   .claude-plugin/marketplace.json
   .mcp.json
   dist/mothdex-mcp.mjs        # release artifact, committed; CI checks dist == build(src) (T-34)
+                              # marketplace.json: source "./" before the first release, github ref+sha after (§1)
   skills/mothdex/SKILL.md     # model-invoked: how to pick an entry and a link
   skills/search/SKILL.md      # user-invocable: /mothdex:search <query>
   skills/random/SKILL.md      # user-invocable: /mothdex:random [platform]
@@ -97,7 +101,9 @@ Rules:
 - CI (T-4/T-34): `claude plugin validate . --strict` (exit 0 required; warnings fail). Run it with a pinned Claude Code
   version installed in CI. `--profile directory` only if the plugin is ever submitted to Anthropic's directory.
 - Smoke test: `node dist/mothdex-mcp.mjs` over stdio, then initialize → `tools/list` → one call (tools.md §6).
-- Local install check before each release: `claude plugin marketplace add ./` plus `claude plugin install mothdex@mothdex-mcp`.
+- Local check before each release, against the **working tree** (after the pin the marketplace entry points at a past
+  tag, so `marketplace add ./` would test that tag, not your changes): `claude --plugin-dir .`, or a scratch
+  marketplace outside `.claude-plugin/` whose entry has `source: "./"`.
 
 ## 5. Future (M3', not in v0.1)
 

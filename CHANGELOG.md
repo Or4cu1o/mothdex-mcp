@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `release` environment approves, attaches `mothdex-mcp_<version>.mjs` and `checksums.txt` to the GitHub Release. No
   dependency cache, frozen lockfile, no install scripts, actions pinned by SHA. CI gains the check `dist == build(src)`
   and validates the marketplace manifest. `docs/release.md` documents verification, owner settings and the release
-  steps, including pinning the marketplace `source` to the tag and commit.
+  steps, including pinning the marketplace `source` to the tag and commit. `publish` also checks that the tag still
+  resolves to the built commit and verifies attestations with `--source-digest`; the staged release file is smoke-tested;
+  CI lints the workflows with a pinned actionlint.
 
 ### Changed
 
