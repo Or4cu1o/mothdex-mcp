@@ -101,13 +101,17 @@ jobs:
           node-version-file: .node-version
       - name: Versions agree
         run: node scripts/check-versions.mjs
-      # Pinned: 2.1.330 is the first release that knows plugin.json "network" (2.1.323 warns, and
-      # --strict fails on warnings). The install script fetches the native binary, so it is allowed
-      # for this one package and version only.
+      # Pinned: 2.1.330 is the first release that knows plugin.json "network"; 2.1.323 reports it as an
+      # unknown field and --strict fails on that. The native binary comes from the pinned optional
+      # dependency @anthropic-ai/claude-code-linux-x64; the package's postinstall (install.cjs) only
+      # links it. --strict-allow-scripts makes the install fail if any other package has an install
+      # script, so only this package at this version may run one.
       - name: Install Claude Code
-        run: npm install -g --allow-scripts=@anthropic-ai/claude-code@2.1.330 @anthropic-ai/claude-code@2.1.330
+        run: npm install -g --strict-allow-scripts --allow-scripts=@anthropic-ai/claude-code@2.1.330 @anthropic-ai/claude-code@2.1.330
       - name: Validate the plugin and the marketplace
         run: claude plugin validate . --strict
+        env:
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
 
   gitleaks:
     name: gitleaks
