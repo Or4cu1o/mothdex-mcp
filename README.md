@@ -41,8 +41,8 @@ else. Set both variables (the plugin and the `.mcpb` set the first for you; choo
 - `MOTHDEX_DOWNLOAD_DIR=/absolute/path/to/an/existing/folder`.
 
 The folder must exist and must not be a filesystem root, your home folder, a protected folder (`~/.ssh`, `~/.config`,
-`~/.claude`, ...), a launcher folder (`ports`, `ports_scripts`, `windows`), a Git working tree, a system folder (`/etc`, `/var`,
-`/opt`, `/proc`, Program Files, ...) or a world-writable folder. Optional caps: `MOTHDEX_DOWNLOAD_MAX_FILE_BYTES` and `MOTHDEX_DOWNLOAD_MAX_TOTAL_BYTES` (default 64 GiB each).
+`~/.claude`, ...), a launcher folder (`ports`, `ports_scripts`, `windows`), a Git working tree, a system folder (`/etc`, `/var` on Linux,
+`/opt`, `/proc`, `/run/user`, Program Files, ...; removable drives under `/run/media` are fine) or a world-writable folder. Optional caps: `MOTHDEX_DOWNLOAD_MAX_FILE_BYTES` and `MOTHDEX_DOWNLOAD_MAX_TOTAL_BYTES` (default 64 GiB each).
 Only `proxy.mothdex.net` links are fetched, one download runs at a time, at most 20 complete per server run, a file is
 never overwritten (`status: "exists"`) and executable extensions are refused. Integrity is the SHA-256 of what was
 written, not proof that the file is genuine.

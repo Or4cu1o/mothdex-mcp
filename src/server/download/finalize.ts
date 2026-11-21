@@ -17,6 +17,8 @@ export async function placeWithoutReplacing(
   fs: DownloadFs,
   part: string,
   final: string,
+  /** Staging files in use: the copy target is added while it is being written, so a signal removes it too. */
+  active?: Set<string>,
 ): Promise<"done" | "exists"> {
   try {
     await fs.link(part, final);
@@ -27,7 +29,7 @@ export async function placeWithoutReplacing(
     if (!NO_LINK_CODES.has(code)) throw error;
   }
   try {
-    await fs.copyFileExcl(part, final);
+    await fs.copyFileExcl(part, final, active);
     return "done";
   } catch (error) {
     if (codeOf(error) === "EEXIST") return "exists";

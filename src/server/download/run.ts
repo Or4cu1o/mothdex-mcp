@@ -14,6 +14,8 @@ import { type Schedule, transfer } from "./transfer";
 /** Downloads come from this host only, whatever MOTHDEX_ALLOWED_HOSTS says (D16, until E-v0.2-hosts). */
 export const DOWNLOAD_HOST = "proxy.mothdex.net";
 const MIB = 1024n * 1024n;
+/** 0644 minus the umask, read once: `process.umask()` with no argument is documentation-deprecated (DEP0139). */
+const FINAL_MODE = 0o644 & ~process.umask();
 const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
 const PART_NAME = /^\.mothdex-[a-z2-7]{26}$/;
 
@@ -217,19 +219,21 @@ export async function runDownload(
     });
     await handle.sync();
     // On the open handle, because a path-based chmod would follow a symlink. 0644 minus the user's umask (T-60 case 20).
-    await handle.chmod(0o644 & ~process.umask());
+    await handle.chmod(FINAL_MODE);
     await handle.close();
     handle = undefined;
     if ((await rt.fs.realpath(dest).catch(() => undefined)) !== dest) {
       throw new DownloadFailure("path_rejected", "the folder changed before finalize");
     }
-    const placed = await placeWithoutReplacing(rt.fs, part, final).catch((error: unknown) => {
-      // A link or copy error that is not EEXIST: a stable code, never an internal error (Alicerce S3).
-      const mapped = classify(error);
-      throw mapped instanceof DownloadFailure
-        ? mapped
-        : new DownloadFailure("path_rejected", codeOf(error));
-    });
+    const placed = await placeWithoutReplacing(rt.fs, part, final, state.activeParts).catch(
+      (error: unknown) => {
+        // A link or copy error that is not EEXIST: a stable code, never an internal error (Alicerce S3).
+        const mapped = classify(error);
+        throw mapped instanceof DownloadFailure
+          ? mapped
+          : new DownloadFailure("path_rejected", codeOf(error));
+      },
+    );
     if (placed === "exists") return existsResult(final);
     state.noteCompleted();
     rt.log(`download ${jobId} done: host ${DOWNLOAD_HOST}, ${result.bytes} bytes`);

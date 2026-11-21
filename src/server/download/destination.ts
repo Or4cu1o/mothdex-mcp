@@ -34,7 +34,10 @@ const POSIX_DENY = [
   "/dev",
   "/proc",
   "/sys",
-  "/run",
+  "/run/user",
+  "/run/systemd",
+  "/run/dbus",
+  "/run/lock",
 ];
 
 const flavor = (platform: NodeJS.Platform) => (platform === "win32" ? path.win32 : path.posix);

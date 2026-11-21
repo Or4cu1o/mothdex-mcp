@@ -23959,7 +23959,10 @@ var POSIX_DENY = [
   "/dev",
   "/proc",
   "/sys",
-  "/run"
+  "/run/user",
+  "/run/systemd",
+  "/run/dbus",
+  "/run/lock"
 ];
 var flavor = (platform) => platform === "win32" ? path.win32 : path.posix;
 var foldCase = (platform) => platform === "win32" || platform === "darwin" ? (text) => text.toLowerCase() : (text) => text;
@@ -24058,7 +24061,7 @@ var realFs = {
   lstat: (path3) => fsp.lstat(path3),
   open: (path3, flags, mode) => fsp.open(path3, flags, mode),
   link: (existing, created) => fsp.link(existing, created),
-  copyFileExcl: (source, target) => copyExclusive(source, target),
+  copyFileExcl: (source, target, active) => copyExclusive(source, target, void 0, active),
   unlink: (path3) => fsp.unlink(path3),
   readdir: (path3) => fsp.readdir(path3),
   freeBytes: async (path3) => {
@@ -24070,11 +24073,12 @@ var codeOf = (error2) => typeof error2 === "object" && error2 !== null && "code"
 var STAGING_FLAGS = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0);
 var CHUNK_BYTES = 1024 * 1024;
 async function copyExclusive(source, target, onChunk = () => {
-}) {
+}, active) {
   const input = await fsp.open(source, "r");
   try {
     const mode = (await input.stat()).mode & 511;
     const output = await fsp.open(target, STAGING_FLAGS, mode);
+    active?.add(target);
     try {
       const buffer = Buffer.allocUnsafe(CHUNK_BYTES);
       let written = 0;
@@ -24093,9 +24097,11 @@ async function copyExclusive(source, target, onChunk = () => {
     } catch (error2) {
       await output.close().catch(() => void 0);
       await fsp.unlink(target).catch(() => void 0);
+      active?.delete(target);
       throw error2;
     }
     await output.close();
+    active?.delete(target);
   } finally {
     await input.close();
   }
@@ -24108,7 +24114,7 @@ var NO_LINK_CODES = /* @__PURE__ */ new Set([
   "ENOSYS",
   "EXDEV"
 ]);
-async function placeWithoutReplacing(fs2, part, final) {
+async function placeWithoutReplacing(fs2, part, final, active) {
   try {
     await fs2.link(part, final);
     return "done";
@@ -24118,7 +24124,7 @@ async function placeWithoutReplacing(fs2, part, final) {
     if (!NO_LINK_CODES.has(code)) throw error2;
   }
   try {
-    await fs2.copyFileExcl(part, final);
+    await fs2.copyFileExcl(part, final, active);
     return "done";
   } catch (error2) {
     if (codeOf(error2) === "EEXIST") return "exists";
@@ -24337,6 +24343,7 @@ async function transfer(options) {
 // src/server/download/run.ts
 var DOWNLOAD_HOST = "proxy.mothdex.net";
 var MIB = 1024n * 1024n;
+var FINAL_MODE = 420 & ~process.umask();
 var BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
 var PART_NAME = /^\.mothdex-[a-z2-7]{26}$/;
 var stripControl = (text) => [...text].filter((char) => !/[\p{Cc}\p{Cf}\u2028\u2029]/u.test(char)).join("");
@@ -24476,16 +24483,18 @@ async function runDownload(rt, env, args, onProgress) {
       ...rt.idleMs === void 0 ? {} : { idleMs: rt.idleMs }
     });
     await handle.sync();
-    await handle.chmod(420 & ~process.umask());
+    await handle.chmod(FINAL_MODE);
     await handle.close();
     handle = void 0;
     if (await rt.fs.realpath(dest).catch(() => void 0) !== dest) {
       throw new DownloadFailure("path_rejected", "the folder changed before finalize");
     }
-    const placed = await placeWithoutReplacing(rt.fs, part, final).catch((error2) => {
-      const mapped = classify(error2);
-      throw mapped instanceof DownloadFailure ? mapped : new DownloadFailure("path_rejected", codeOf(error2));
-    });
+    const placed = await placeWithoutReplacing(rt.fs, part, final, state.activeParts).catch(
+      (error2) => {
+        const mapped = classify(error2);
+        throw mapped instanceof DownloadFailure ? mapped : new DownloadFailure("path_rejected", codeOf(error2));
+      }
+    );
     if (placed === "exists") return existsResult(final);
     state.noteCompleted();
     rt.log(`download ${jobId} done: host ${DOWNLOAD_HOST}, ${result.bytes} bytes`);

@@ -208,10 +208,15 @@ describe("destination deny-list (case 3)", () => {
       "/dev/shm",
       "/proc/1",
       "/sys/x",
-      "/run/user",
+      "/run/user/1000",
+      "/run/systemd/x",
     ]) {
       expect(denyReason(target, home, ctx), target).toBeDefined();
     }
+  });
+
+  it.skipIf(!posix)("/run/media (where SD cards and USB drives mount) stays allowed", () => {
+    expect(denyReason("/run/media/u/card", home, ctx)).toBeUndefined();
   });
 
   it("a sibling that only shares a prefix is not inside the protected folder", () => {

@@ -30,7 +30,7 @@ export interface DownloadFs {
   open(path: string, flags: number, mode: number): Promise<HandleLike>;
   link(existing: string, created: string): Promise<void>;
   /** Creates `target` exclusively (never replacing) and copies `source` into it; a failed copy leaves no `target`. */
-  copyFileExcl(source: string, target: string): Promise<void>;
+  copyFileExcl(source: string, target: string, active?: Set<string>): Promise<void>;
   unlink(path: string): Promise<void>;
   readdir(path: string): Promise<string[]>;
   /** Available bytes for unprivileged users. */
@@ -45,7 +45,7 @@ export const realFs: DownloadFs = {
   lstat: (path) => fsp.lstat(path),
   open: (path, flags, mode) => fsp.open(path, flags, mode),
   link: (existing, created) => fsp.link(existing, created),
-  copyFileExcl: (source, target) => copyExclusive(source, target),
+  copyFileExcl: (source, target, active) => copyExclusive(source, target, undefined, active),
   unlink: (path) => fsp.unlink(path),
   readdir: (path) => fsp.readdir(path),
   freeBytes: async (path) => {
@@ -78,11 +78,14 @@ export async function copyExclusive(
   source: string,
   target: string,
   onChunk: (written: number) => void = () => {},
+  active?: Set<string>,
 ): Promise<void> {
   const input = await fsp.open(source, "r");
   try {
     const mode = (await input.stat()).mode & 0o777;
     const output = await fsp.open(target, STAGING_FLAGS, mode); // EEXIST: nothing was created
+    // From here until the copy is synced, the target is a staging file: a signal must remove it too (MT-14).
+    active?.add(target);
     try {
       const buffer = Buffer.allocUnsafe(CHUNK_BYTES);
       let written = 0;
@@ -101,9 +104,11 @@ export async function copyExclusive(
     } catch (error) {
       await output.close().catch(() => undefined);
       await fsp.unlink(target).catch(() => undefined);
+      active?.delete(target);
       throw error;
     }
     await output.close();
+    active?.delete(target);
   } finally {
     await input.close();
   }
