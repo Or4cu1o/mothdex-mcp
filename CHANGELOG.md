@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `docs/release.md`: owner checklist for the first release v0.1.0 (gates, settings, prepare PR, tag, verification of the
+  published assets, marketplace pin, rollback) and what was not verified yet (T-23).
 - T-34: release pipeline. `release.yml` runs only for `v*` tags (tag on `main`, versions agree, lint, typecheck, tests,
   committed dist == build, smoke), attests the bundle and `checksums.txt` (GitHub build provenance) and, after the
   `release` environment approves, attaches `mothdex-mcp_<version>.mjs` and `checksums.txt` to the GitHub Release. No
