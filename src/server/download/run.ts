@@ -216,7 +216,8 @@ export async function runDownload(
       ...(rt.idleMs === undefined ? {} : { idleMs: rt.idleMs }),
     });
     await handle.sync();
-    await handle.chmod(0o644); // on the open handle: a path-based chmod would follow a symlink
+    // On the open handle, because a path-based chmod would follow a symlink. 0644 minus the user's umask (T-60 case 20).
+    await handle.chmod(0o644 & ~process.umask());
     await handle.close();
     handle = undefined;
     if ((await rt.fs.realpath(dest).catch(() => undefined)) !== dest) {

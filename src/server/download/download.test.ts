@@ -203,7 +203,7 @@ describe("destination deny-list (case 3)", () => {
   it.skipIf(!posix)("refuses /etc/..x and the extra POSIX roots", () => {
     for (const target of [
       "/etc/..x",
-      "/var/spool/cron",
+      ...(process.platform === "linux" ? ["/var/spool/cron"] : ["/private/var/db/x"]),
       "/opt/tool",
       "/dev/shm",
       "/proc/1",

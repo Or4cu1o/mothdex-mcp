@@ -24476,7 +24476,7 @@ async function runDownload(rt, env, args, onProgress) {
       ...rt.idleMs === void 0 ? {} : { idleMs: rt.idleMs }
     });
     await handle.sync();
-    await handle.chmod(420);
+    await handle.chmod(420 & ~process.umask());
     await handle.close();
     handle = void 0;
     if (await rt.fs.realpath(dest).catch(() => void 0) !== dest) {
