@@ -8,14 +8,25 @@
 [Model Context Protocol](https://modelcontextprotocol.io) server for the
 [Mothdex](https://api.mothdex.net) API.
 
-> **Status: pre-alpha.** Only the project skeleton exists. The bundle prints its
-> version and nothing else. Everything listed below is **planned**, not
-> implemented.
+> **Status: pre-alpha.** The stdio server, its read tools, resources and prompts work against the live API
+> but nothing is released yet. The Claude Code plugin, the `.mcpb` package and the registry entry are still planned.
 
-## Planned features
+## What it offers
 
-- [ ] Read tools: search, entry details, random pick, platforms, regions, database info, download link resolution
-- [ ] MCP resources and prompts
+- Tools (read-only): `search_entries`, `get_entry`, `random_entry`, `list_platforms`, `list_regions`, `db_info`,
+  `resolve_download`. Outputs are compact JSON (`structuredContent` plus the same JSON as text).
+  `search_entries` needs at least one filter. `resolve_download` returns links and flags hosts outside the
+  allowlist; it downloads nothing.
+- Resources: `mothdex://platforms`, `mothdex://regions`, `mothdex://entry/{slug}`.
+- Prompts: `find_best_version`, `build_collection`.
+- Text that comes from the database is untrusted data; the tool and prompt texts tell the model so.
+
+Configuration is environment only: `MOTHDEX_API_BASE_URL` (default `https://api.mothdex.net/v1`),
+`MOTHDEX_API_RATE_LIMIT` (requests per second, clamped to 1..10, default 5) and `MOTHDEX_ALLOWED_HOSTS`
+(comma list, default `proxy.mothdex.net`). Logs go to stderr; stdout carries only the protocol.
+
+## Planned
+
 - [ ] Opt-in, directory-confined file download tool (off by default)
 - [ ] Claude Code plugin and marketplace
 - [ ] Claude Desktop `.mcpb` package and MCP registry entry
@@ -28,7 +39,7 @@ Requires Node (see `.node-version`) and [pnpm](https://pnpm.io) (version pinned 
 ```sh
 pnpm install --frozen-lockfile
 pnpm build
-node dist/mothdex-mcp.mjs
+node dist/mothdex-mcp.mjs   # speaks MCP on stdin/stdout; --version prints the version
 ```
 
 `src/api/` holds the API v1 client. Its test fixtures are a copy of the ones in

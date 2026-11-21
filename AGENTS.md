@@ -8,11 +8,10 @@ Guidance for humans and coding agents working in this repository.
 pre-alpha skeleton. The MCP SDK is not a dependency yet. Plugin packaging
 (`.claude-plugin/`, `.mcp.json`, `skills/`) is not part of the skeleton.
 
-Node baseline: `engines.node >=24` and the esbuild target `node24` are a
-provisional skeleton default (Node 24 and 26 are LTS lines at the time of
-writing; `.node-version` and CI use 26). Revisit in T-31 against the MCP SDK's
-minimum Node version; `@types/node` 26 can expose APIs missing on Node 24, so
-keep the minimum and the types aligned when it changes.
+Node baseline: `engines.node >=24` and the esbuild target `node24` (Node 24 and 26 are LTS lines;
+`.node-version` and CI use 26). The MCP SDK needs Node >=20, so it does not raise the floor. The tools contract
+says Node >=20; whether to lower our floor to match is Alicerce's decision (T-31 left it at 24). `@types/node` 26 can
+expose APIs missing on Node 24, so keep the minimum and the types aligned when it changes.
 
 ## Commands
 
@@ -24,7 +23,7 @@ pnpm typecheck                                  # tsc --noEmit
 pnpm test                                       # vitest
 pnpm build                                      # esbuild -> dist/mothdex-mcp.mjs
 pnpm check:fixtures                             # src/api/testdata copy vs mothdex-cli main (network)
-node dist/mothdex-mcp.mjs                       # run (prints version)
+node dist/mothdex-mcp.mjs                       # stdio MCP server (--version prints the version)
 pnpm audit --audit-level high                      # known vulnerabilities (all deps, incl. toolchain)
 gitleaks git --pre-commit --staged --redact     # secrets scan before every commit
 ```
