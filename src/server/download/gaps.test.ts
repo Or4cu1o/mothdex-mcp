@@ -89,3 +89,25 @@ describe("case 25: the transfer stops at byte size+1", () => {
     expect(rig.files()).toEqual([]);
   });
 });
+
+describe("case 20: the final mode honors the user's umask", () => {
+  it.skipIf(process.platform === "win32")(
+    "a strict umask gives 0600 and the usual one 0644, whatever the process umask was",
+    async () => {
+      const modeUnder = async (mask: number): Promise<number> => {
+        const before = process.umask(mask);
+        try {
+          const rig = makeRig({});
+          rigs.push(rig);
+          const result = await rig.run();
+          return fs.statSync(result.path).mode & 0o777;
+        } finally {
+          process.umask(before);
+        }
+      };
+      expect(await modeUnder(0o077)).toBe(0o600);
+      expect(await modeUnder(0o027)).toBe(0o640);
+      expect(await modeUnder(0o022)).toBe(0o644);
+    },
+  );
+});
