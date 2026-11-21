@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Node floor is 22 (`engines`, esbuild target `node22`), the oldest LTS still supported; the tools contract says so.
 - Tools contract: client error kinds map to codes (adds `canceled` and `internal`), Node ≥ 22, and links on trusted
   hosts come first in `resolve_download`.
 - A redirect the API client refuses (another origin, a scheme or port change, more than 3 hops) is now the
@@ -17,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Stdio MCP server on `@modelcontextprotocol/server` 2.4.0 (zod 4): read tools `search_entries`, `get_entry`,
+  `random_entry`, `list_platforms`, `list_regions`, `db_info` and `resolve_download`; resources
+  `mothdex://platforms`, `mothdex://regions` and `mothdex://entry/{slug}`; prompts `find_best_version` and
+  `build_collection`. Compact outputs, an in-memory LRU cache (500 items) with the CLI's TTLs, errors as
+  `isError` with `structuredContent.error`, host allowlist flag on download links. `--version` prints the version.
 - TypeScript client for the Mothdex API v1 in `src/api/` (search, entry, random, platforms, regions, info), with the
   same rules as the Go client in mothdex-cli: envelope check with `info.error` on HTTP 200, error kinds, a token
   bucket at 5 req/s, a 429 breach circuit held in memory, bounded retries, `Cc`/`Cf` stripped from server messages,
