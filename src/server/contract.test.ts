@@ -94,11 +94,12 @@ describe("every read tool, happy path (outputs are validated by the client again
     const result = await call(h, "get_entry", { slug: "doom-1993-dos" });
     expectWireShape(result);
     const body = result.structuredContent as {
-      entry: { slug: string };
+      entry: { slug: string; size_range?: number[] };
       links: { index: number }[];
       links_total: number;
     };
     expect(body.entry.slug).toBe("doom-1993-dos");
+    expect(body.entry.size_range).toEqual([261558, 5313534]); // [smallest, largest] link, in bytes
     expect(body.links.map((link) => link.index)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(body.links_total).toBe(9);
   });
@@ -208,7 +209,10 @@ describe("input limits from the shared fragments (invalid_request, API never cal
     ["page_size 0", "search_entries", { query: "x", page_size: 0 }],
     ["fractional page", "search_entries", { query: "x", page: 1.5 }],
     ["slug of 257 chars", "get_entry", { slug: long(257) }],
+    ["links_limit 0", "get_entry", { slug: "x", links_limit: 0 }],
     ["links_limit 26", "get_entry", { slug: "x", links_limit: 26 }],
+    ["page_size 26", "search_entries", { query: "x", page_size: 26 }],
+    ["page 0", "search_entries", { query: "x", page: 0 }],
     ["links_offset -1", "get_entry", { slug: "x", links_offset: -1 }],
     ["limit 11", "resolve_download", { slug: "x", limit: 11 }],
     ["limit 0", "resolve_download", { slug: "x", limit: 0 }],
