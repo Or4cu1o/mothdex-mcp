@@ -107,8 +107,11 @@ export async function copyExclusive(
       active?.delete(target);
       throw error;
     }
-    await output.close();
-    active?.delete(target);
+    try {
+      await output.close();
+    } finally {
+      active?.delete(target); // a finished file is no longer a staging file, even if close() throws
+    }
   } finally {
     await input.close();
   }

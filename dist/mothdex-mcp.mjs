@@ -24100,8 +24100,11 @@ async function copyExclusive(source, target, onChunk = () => {
       active?.delete(target);
       throw error2;
     }
-    await output.close();
-    active?.delete(target);
+    try {
+      await output.close();
+    } finally {
+      active?.delete(target);
+    }
   } finally {
     await input.close();
   }
