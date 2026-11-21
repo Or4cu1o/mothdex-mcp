@@ -84,6 +84,10 @@ Rules:
 - `license` is `GPL-3.0-only`, the same SPDX id as `package.json` in both repos (checked in the T-4 scaffold PR).
 - `version` is bumped on **every** release (otherwise installed users stay pinned). One release script writes the same
   version into `package.json`, `plugin.json` and, from M3', `server.json` and the MCPB manifest. CI fails on a mismatch.
+- **Before the first release (T-34)** both files carry `0.0.0` (T-33), and `dist/` is not committed yet, so a git
+  install has no bundle and the MCP server does not start. The README therefore documents only local testing
+  (clone, `pnpm build`, `claude plugin marketplace add ./`, `/plugin install mothdex@mothdex-mcp`). T-34 stops
+  ignoring `dist/`, commits the bundle with the `dist == build(src)` check and sets `0.1.0` before the first tag.
 - `network.hosts` is informational only (not enforced). It lists the API host, and the proxy host that resolved links
   point to (the read-only server never calls the proxy; `download_file` will, from M3').
 - Skills treat API text as data (tools.md §1); `skills/download` never downloads. It calls `resolve_download` and shows
