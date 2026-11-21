@@ -195,7 +195,9 @@ The steps of one call, in order. Any failure stops the call; the error codes are
    - A second call while one is active returns `busy` (`retryable: true`) at once.
    - There is no queue, so a stalled proxy cannot pile up waiting calls.
 7. **Space** (CR-10). `fs.statfs(destReal)` must report `bavail × bsize − ledger ≥ size + max(size × 5 %, 256 MiB)`, in BigInt arithmetic. Otherwise `disk_full`.
-   - The ledger reserves `2 × size` until the call ends, because the copy fallback (§3.5) needs twice the space.
+   - The ledger reserves `2 × size` until the call ends, because the copy fallback (§3.5) needs twice the space. The
+     preflight checks only `size` plus margin, so the copy fallback can still hit `ENOSPC`; that is `disk_full` with
+     the cleanup of §3.5.
 8. **Request.** `fetch(url, {redirect: "manual", headers: {"accept-encoding": "identity"}, signal})`; no cookies, credentials or custom dispatcher.
 9. **Response checks**, all before the body is read:
    - Any 3xx is `untrusted_redirect`, not retried.
@@ -212,18 +214,19 @@ The steps of one call, in order. Any failure stops the call; the error codes are
 
 **Staging.**
 
-- The staging file is `destReal/.mothdex-<26 chars of base32 from crypto.randomBytes>.part`, opened with `fs.open(p, "wx" | O_NOFOLLOW where defined, 0o600)`.
+- The staging file is `destReal/.mothdex-<26 chars of base32 from crypto.randomBytes>.part`, opened with the numeric flags `O_WRONLY | O_CREAT | O_EXCL`, plus `O_NOFOLLOW` when `fs.constants` defines it, and mode `0o600`. Never combine the string flag `"wx"` with a number.
 - If the name already exists, one new random name is tried, then the call fails with `path_rejected` (test 15).
 
 **Finalize**, after the body is verified:
 
-1. `filehandle.sync()`, then close.
+1. `filehandle.sync()`, then `filehandle.chmod(0o644)` on the open staging handle, then close. The hard link carries
+   that mode, and `copyFile` copies the source mode (test 20 asserts both). There is **no path-based `chmod`** on the
+   final name, because it follows symlinks (Sentinela M1).
 2. Re-check the destination: `realpath(destReal) === destReal`, else `path_rejected`.
 3. `fs.link(part, final)`:
    - `EEXIST` gives `{status: "exists"}`.
    - `EPERM`, `ENOTSUP`, `EXDEV` or `ENOSYS` fall back to `fs.copyFile(part, final, COPYFILE_EXCL)`, with `EEXIST` again giving `exists`.
-4. `chmod(final, 0o644)`; the file is never made executable.
-5. `unlink(part)`.
+4. `unlink(part)`. The file is never made executable.
 
 Two prohibitions:
 
@@ -246,7 +249,7 @@ Two prohibitions:
 | bytes per file                                                    | 64 GiB | `MOTHDEX_DOWNLOAD_MAX_FILE_BYTES`, integer 1 MiB..256 GiB, ≤ total |
 
 - A call that would cross any limit is `quota_exceeded` (`retryable: false`). It fetches nothing, and the limit holds until the server restarts.
-- The started-transfers cap is an addition to T-60; Sentinela confirms it.
+- The started-transfers cap is an addition to T-60, confirmed by Sentinela (T-61).
 
 ### 3.7 Output and progress (CR-13; MT-24, MT-25, MT-26)
 
@@ -271,7 +274,7 @@ outputSchema: z.object({
   - `\p{Cf}`;
   - U+2028 and U+2029.
 - The sanitized name already holds none of these; the strip is defense in depth.
-- MT-06 asks the result to echo the title, platform and size. The model already holds those from `get_entry`/`resolve_download`, so the shape stays minimal per test 37. Sentinela confirms.
+- MT-06 asks the result to echo the title, platform and size. The model already holds those from `get_entry`/`resolve_download`, so the shape stays minimal per test 37 (confirmed by Sentinela, T-61).
 
 **Errors.** Error messages are fixed English strings per code, with no upstream body, Node error text or path in them. The detail goes to the stderr log only.
 
@@ -317,8 +320,8 @@ T-60 §6 cases 1-39 are the required test list for Bigorna's PR. Case 6 is dropp
   repos test the same table. `scripts/check-fixtures.mjs` gains that file.
 - **Skills (Bigorna):** the `mothdex` skill and `skills/download` get the explicit-intent rule of §3.3; `skills/download`
   calls `download_file` only when it is registered and the user asked to download, otherwise it prints the CLI command.
-- **For Sentinela to confirm:** the started-transfers cap (§3.6), the minimal result shape (§3.7, MT-06 vs test 37), and
-  the folder-as-opt-in mapping (plugin.md §5.1).
+- **Confirmed by Sentinela (T-61):** the started-transfers cap (§3.6), the minimal result shape (§3.7), and the
+  folder-as-opt-in mapping (plugin.md §5.1).
 - **Unverified:** client tool timeouts during a silent warm-up (§3.7); Windows junction realpath (test 17); `fs.link`
   on FAT/exFAT (the copy fallback covers it).
 

@@ -129,7 +129,9 @@ This replaces the v0.1 sketch's "`1` only when the user opts in" because:
 - the mcpb boolean substitution is Unverified (SC-05);
 - one explicit act (picking a folder whose description says it enables writes) is the consent.
 
-Sentinela confirms this mapping.
+Sentinela confirmed this mapping (T-61). **Unverified:** how Claude Code treats an unresolved `user_config` placeholder.
+If the client refuses to start the server, the read tools go down too. Bigorna checks this once with a real plugin
+install and records the result in the implementation PR.
 
 `plugin.json`:
 
