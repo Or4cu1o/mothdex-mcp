@@ -156,7 +156,7 @@ export interface RigOptions {
 
 /** A real temporary folder, a scripted API entry and a scripted proxy. */
 export function makeRig(options: RigOptions = {}): Rig {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "mothdex-dl-")));
+  const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "mothdex-dl-")));
   const links = options.links ?? [rawLink()];
   const { client, clock } = makeClient([{ body: entryBody(links) }]);
   const catalog = new Catalog(client, new TtlCache(clock));

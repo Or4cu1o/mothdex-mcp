@@ -41,7 +41,8 @@ const failure = async (call: Promise<unknown>): Promise<string> => {
 };
 /** The placeholder a client leaves in place when the plugin setting is empty. */
 const PLACEHOLDER = ["$", "{user_config.download_dir}"].join("");
-const tmp = (): string => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "mothdex-dst-")));
+const tmp = (): string =>
+  fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "mothdex-dst-")));
 
 describe("happy path and output (cases 37, 20)", () => {
   it("case 37: writes the file and answers exactly {status, path, bytes, sha256, crc}", async () => {
@@ -56,7 +57,7 @@ describe("happy path and output (cases 37, 20)", () => {
       crc: "skipped",
     });
     expect(fs.readFileSync(result.path, "utf8")).toBe("0123456789");
-    expect(fs.realpathSync(path.dirname(result.path))).toBe(r.dir);
+    expect(fs.realpathSync.native(path.dirname(result.path))).toBe(r.dir);
     expect(r.files()).toEqual(["Game.zip"]); // no .part left
   });
 
