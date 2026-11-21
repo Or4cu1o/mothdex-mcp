@@ -56,6 +56,16 @@ export class DownloadState {
     this.#bytesStarted += size;
   }
 
+  /**
+   * Swaps the started charge of `estimate` (`link.size`) for the real length `cl` (T-27). False, and
+   * no change, when `cl` would cross the total-bytes budget.
+   */
+  chargeLength(estimate: number, cl: number, limits: DownloadLimits): boolean {
+    if (this.#bytesStarted - estimate + cl > limits.totalBytes) return false;
+    this.#bytesStarted += cl - estimate;
+    return true;
+  }
+
   noteCompleted(): void {
     this.#completed++;
   }
