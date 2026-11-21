@@ -119,21 +119,6 @@ jobs:
       - name: Verify checksums before publishing
         working-directory: release
         run: sha256sum --check --strict checksums.txt
-      - name: The tag still points at the commit that was built
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          # Resolve the tag through annotated tag objects to a commit; it must be the commit this run built.
-          type=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.type)
-          sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha)
-          for _ in 1 2 3; do
-            [ "$type" = "tag" ] || break
-            type=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq .object.type)
-            sha=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq .object.sha)
-          done
-          [ "$type" = "commit" ] || { echo "tag $TAG does not resolve to a commit"; exit 1; }
-          [ "$sha" = "$GITHUB_SHA" ] || { echo "tag $TAG moved: it is at $sha, this run built $GITHUB_SHA"; exit 1; }
       - name: Verify attestations (signer workflow, tag and commit) before publishing
         working-directory: release
         env:
@@ -145,6 +130,29 @@ jobs:
               --signer-workflow "$SIGNER_WORKFLOW" --source-ref "refs/tags/$TAG" \
               --source-digest "$GITHUB_SHA" --deny-self-hosted-runners
           done
+      - name: The upload set is exactly what checksums.txt lists
+        working-directory: release
+        run: |
+          # sha256sum --check only covers the listed files: nothing else may be uploaded.
+          want=$( { awk '{print $2}' checksums.txt; echo checksums.txt; } | sort )
+          have=$(find . -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)
+          [ "$want" = "$have" ] || { echo "the files in release differ from checksums.txt plus checksums.txt itself"; diff <(echo "$want") <(echo "$have") || true; exit 1; }
+      - name: The tag still points at the commit that was built
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Last step before the release is created, to keep the window short. Resolve the tag through annotated
+          # tag objects to a commit (one API call per object); it must be the commit this run built.
+          out=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.type + " " + .object.sha')
+          type=${out% *}; sha=${out#* }
+          for _ in 1 2 3; do
+            [ "$type" = "tag" ] || break
+            out=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq '.object.type + " " + .object.sha')
+            type=${out% *}; sha=${out#* }
+          done
+          [ "$type" = "commit" ] || { echo "tag $TAG does not resolve to a commit"; exit 1; }
+          [ "$sha" = "$GITHUB_SHA" ] || { echo "tag $TAG moved: it is at $sha, this run built $GITHUB_SHA"; exit 1; }
       - name: Create the release
         working-directory: release
         env:

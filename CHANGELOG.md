@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- T-24b: `release.yml` `publish` checks the tag against the built commit as its last step before the release is created
+  (one API call per object), and refuses to upload files that `checksums.txt` does not list, same as mothdex-cli.
+
 ### Added
 
 - T-62: opt-in `download_file` tool (tools.md §3, threat model T-60). Registered only with `MOTHDEX_MCP_ENABLE_DOWNLOAD=1`
