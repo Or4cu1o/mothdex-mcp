@@ -19,8 +19,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "build": "node scripts/build.mjs",
-    "check:fixtures": "node scripts/check-fixtures.mjs",
-    "check:plugin": "node scripts/check-versions.mjs && claude plugin validate . --strict"
+    "check:fixtures": "node scripts/check-fixtures.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.7",

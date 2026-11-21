@@ -1,5 +1,4 @@
 ---
-
 name: random
 description: Pick a random entry from the Mothdex catalog, optionally on one platform.
 argument-hint: [platform]

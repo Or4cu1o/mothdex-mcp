@@ -1,5 +1,4 @@
 ---
-
 name: search
 description: Search the Mothdex catalog for a title.
 argument-hint: <title> [platform]

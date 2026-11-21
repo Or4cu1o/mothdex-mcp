@@ -1,5 +1,4 @@
 ---
-
 name: mothdex
 description: Find an entry in the Mothdex game catalog and pick the right download link. Use when the user asks for a retro game, ROM, disc image or a version of a title on some platform or region.
 ---

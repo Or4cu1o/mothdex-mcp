@@ -34,14 +34,19 @@ Configuration is environment only: `MOTHDEX_API_BASE_URL` (default `https://api.
 
 ## Install in Claude Code
 
+The plugin installs from the first release (T-34). Until then a git install has no `dist/mothdex-mcp.mjs`, so the
+server would not start. Once released:
+
 ```text
 /plugin marketplace add Or4cu1o/mothdex-mcp
-/plugin install mothdex --marketplace Or4cu1o/mothdex-mcp
+/plugin install mothdex@mothdex-mcp
 ```
 
-The plugin runs the bundled `dist/mothdex-mcp.mjs` with Node and adds the skills `/mothdex:search`,
-`/mothdex:random` and `/mothdex:download`. Which build ships in the repository is decided with the release
-workflow (T-34); until then run `pnpm build` first.
+It runs the bundled `dist/mothdex-mcp.mjs` with Node and adds the skills `/mothdex:search`, `/mothdex:random` and
+`/mothdex:download`.
+
+To try it locally, clone the repository, run `pnpm install --frozen-lockfile` and `pnpm build`, then in Claude Code
+`claude plugin marketplace add ./` and `/plugin install mothdex@mothdex-mcp`.
 
 ## Develop
 

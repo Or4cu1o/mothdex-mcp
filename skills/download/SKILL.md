@@ -1,5 +1,4 @@
 ---
-
 name: download
 description: Resolve the download links of a Mothdex entry and print the CLI command. Never downloads.
 argument-hint: <title|slug> [language]
