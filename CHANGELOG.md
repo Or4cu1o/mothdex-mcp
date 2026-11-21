@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Tools contract: client error kinds map to codes (adds `canceled` and `internal`), Node ≥ 22, and links on trusted
+  hosts come first in `resolve_download`.
 - A redirect the API client refuses (another origin, a scheme or port change, more than 3 hops) is now the
   non-retryable error kind `untrusted_redirect` instead of `network`; the message names only the target host.
 - Tools contract: a refused redirect is the non-retryable error code `untrusted_redirect`, never `network`.
