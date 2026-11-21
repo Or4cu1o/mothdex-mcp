@@ -180,6 +180,12 @@ describe("resources and prompts", () => {
     expect(JSON.parse(text).links.length).toBeLessThanOrEqual(25);
   });
 
+  it("percent-decodes the slug of the entry template exactly once", async () => {
+    const h = await start(ok("entry.json"));
+    await h.mcp.readResource({ uri: "mothdex://entry/a%2525b%20c" });
+    expect(JSON.parse(h.seen[0]?.body ?? "{}")).toEqual({ slug: "a%25b c" });
+  });
+
   it("a missing entry is a resource-not-found error", async () => {
     const h = await start(ok("entry-not-found.json"));
     await expect(h.mcp.readResource({ uri: "mothdex://entry/nope" })).rejects.toThrow();

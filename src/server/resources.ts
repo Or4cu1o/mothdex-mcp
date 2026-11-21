@@ -27,7 +27,7 @@ async function read(uri: URL, load: () => Promise<unknown>): Promise<ReadResourc
   }
 }
 
-/** Slug from the URI template variable: one segment, percent-decoded. */
+/** Slug from the URI template variable. The SDK hands it over still percent-encoded: decode once. */
 function slugOf(variable: string | string[] | undefined): string {
   const raw = Array.isArray(variable) ? (variable[0] ?? "") : (variable ?? "");
   try {

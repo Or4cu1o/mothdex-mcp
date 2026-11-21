@@ -63,6 +63,11 @@ describe("isTrustedHost", () => {
     ["http://proxy.mothdex.net/f", false],
     ["https://proxy.mothdex.net.evil.example/f", false],
     ["https://evil.example/proxy.mothdex.net", false],
+    ["https://proxy.mothdex.net./f", true],
+    ["https://proxy.mothdex.net:443/f", true],
+    ["https://proxy.mothdex.net:8443/f", false],
+    ["https://user:pw@proxy.mothdex.net/f", false],
+    ["https://user@proxy.mothdex.net/f", false],
     ["not a url", false],
   ])("%s -> %s", (url, expected) => {
     expect(isTrustedHost(url, HOSTS)).toBe(expected);

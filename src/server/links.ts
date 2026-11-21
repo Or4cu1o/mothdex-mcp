@@ -13,11 +13,21 @@ export interface RankedLink {
   readonly reasons: readonly string[];
 }
 
-/** True for https URLs whose host is in the allowlist (exact match, case-insensitive). */
+/**
+ * True for https URLs on the default port, without credentials, whose host (one trailing dot
+ * ignored) is in the allowlist. Same strictness as the CLI downloader's URL policy.
+ */
 export function isTrustedHost(url: string, allowedHosts: ReadonlySet<string>): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "https:" && allowedHosts.has(parsed.hostname.toLowerCase());
+    const host = parsed.hostname.toLowerCase().replace(/\.$/, "");
+    return (
+      parsed.protocol === "https:" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      (parsed.port === "" || parsed.port === "443") &&
+      allowedHosts.has(host)
+    );
   } catch {
     return false;
   }
