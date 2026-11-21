@@ -32,6 +32,26 @@ Configuration is environment only: `MOTHDEX_API_BASE_URL` (default `https://api.
 - [ ] Claude Desktop `.mcpb` package and MCP registry entry
 - [x] Single-file bundle without runtime dependencies, attached to each release with checksums and provenance
 
+## Downloads (opt-in)
+
+`download_file` is off unless you turn it on. It writes one file per call into **one folder you choose** and nowhere
+else. Set both variables (the plugin and the `.mcpb` set the first for you; choosing the folder is the opt-in):
+
+- `MOTHDEX_MCP_ENABLE_DOWNLOAD=1` (exactly `1`);
+- `MOTHDEX_DOWNLOAD_DIR=/absolute/path/to/an/existing/folder`.
+
+The folder must exist and must not be a filesystem root, your home folder, a protected folder (`~/.ssh`, `~/.config`,
+`~/.claude`, ...), a launcher folder (`ports`, `ports_scripts`, `windows`), a Git working tree or a world-writable
+folder. Optional caps: `MOTHDEX_DOWNLOAD_MAX_FILE_BYTES` and `MOTHDEX_DOWNLOAD_MAX_TOTAL_BYTES` (default 64 GiB each).
+Only `proxy.mothdex.net` links are fetched, one download runs at a time, at most 20 complete per server run, a file is
+never overwritten (`status: "exists"`) and executable extensions are refused. Integrity is the SHA-256 of what was
+written, not proof that the file is genuine.
+
+**Do not choose "always allow" for this tool**: catalog text is untrusted and could try to make the model call it. The
+tool asks the client to confirm each call. A project-scope `.mcp.json` can run any command, so the client's approval of
+that file is the real boundary (see [SECURITY.md](SECURITY.md)). The design is in
+[docs/security/T-60-threat-model-download-file.md](docs/security/T-60-threat-model-download-file.md).
+
 ## Install in Claude Code
 
 The bundle `dist/mothdex-mcp.mjs` is committed, so a git install works. From the first release the marketplace entry is

@@ -3,6 +3,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/server";
 import { type FakeClock, makeClient, type Scripted } from "../api/test-helpers";
 import { DEFAULT_ALLOWED_HOSTS } from "./config";
 import { createServerFactory } from "./create-server";
+import type { DownloadRuntime } from "./download/run";
 
 export interface Harness {
   readonly mcp: Client;
@@ -16,6 +17,7 @@ export interface Harness {
 export async function startHarness(
   script: readonly Scripted[],
   warn: (message: string) => void = () => {},
+  download?: DownloadRuntime,
 ): Promise<Harness> {
   const { client, clock, seen } = makeClient(script);
   const server = createServerFactory({
@@ -28,6 +30,7 @@ export async function startHarness(
     client,
     clock,
     warn,
+    ...(download === undefined ? {} : { download }),
   })();
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   const mcp = new Client({ name: "test", version: "0" });

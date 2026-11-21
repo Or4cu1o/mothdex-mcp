@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- T-62: opt-in `download_file` tool (tools.md §3, threat model T-60). Registered only with `MOTHDEX_MCP_ENABLE_DOWNLOAD=1`
+  and a valid `MOTHDEX_DOWNLOAD_DIR` (deny-lists, re-checked each call and before finalize). Input is `{slug, link_index}`
+  only; proxy host only, no redirects, identity encoding, `Content-Length` equal to the link size, abort at size+1; a
+  byte-exact port of the CLI `Sanitize` checked against the shared `sanitize-vectors.json` (`check-fixtures` compares it);
+  staging file `O_EXCL|O_NOFOLLOW`, finalize by `link` or an exclusive copy, never `rename`; one download at a time,
+  per-process budgets, disk-space ledger, cancel and stdin-close cleanup, progress notifications. New error codes
+  `no_destination`, `untrusted_url`, `unsafe_name`, `size_mismatch`, `path_rejected`, `disk_full`, `busy`,
+  `quota_exceeded`. No new runtime dependency. The plugin gets an optional `download_dir` setting (choosing it enables
+  downloads) and the `download` skill uses the tool only on an explicit request. Distribution (npm, `.mcpb`,
+  `server.json`) is a separate change.
 - `docs/release.md`: owner checklist for the first release v0.1.0 (gates, settings, prepare PR, tag, verification of the
   published assets, marketplace pin, rollback) and what was not verified yet (T-23).
 - T-60: threat model for the `download_file` tool and the v0.2.0 distribution (`docs/security/`), by Sentinela. It sets

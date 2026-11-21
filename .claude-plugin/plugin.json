@@ -8,5 +8,13 @@
   "repository": "https://github.com/Or4cu1o/mothdex-mcp",
   "license": "GPL-3.0-only",
   "keywords": ["mcp", "mothdex", "retro", "emulation"],
-  "network": { "hosts": ["api.mothdex.net", "proxy.mothdex.net"] }
+  "network": { "hosts": ["api.mothdex.net", "proxy.mothdex.net"] },
+  "userConfig": {
+    "download_dir": {
+      "type": "directory",
+      "title": "Download folder (enables downloads)",
+      "description": "Setting this enables the download_file tool, which writes only into this folder. Leave empty to keep the plugin read-only.",
+      "required": false
+    }
+  }
 }
