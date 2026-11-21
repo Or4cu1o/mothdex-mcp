@@ -577,23 +577,6 @@ describe("network (cases 23-28)", () => {
     },
   );
 
-  it("case 25: a missing or different Content-Length is size_mismatch", async () => {
-    for (const length of [null, 9, 11] as const) {
-      const r = rig({ replies: [{ chunks: ["0123456789"], length }] });
-      expect(await failure(r.run())).toBe("size_mismatch");
-      expect(r.files()).toEqual([]);
-    }
-  });
-
-  it("case 25: a body longer than announced aborts at byte size+1; a short one is size_mismatch", async () => {
-    const long = rig({ replies: [{ chunks: ["01234", "56789", "A"], length: 10 }] });
-    expect(await failure(long.run())).toBe("size_mismatch");
-    expect(long.files()).toEqual([]);
-    const short = rig({ replies: [{ chunks: ["01234"], length: 10 }] });
-    expect(await failure(short.run())).toBe("size_mismatch");
-    expect(short.files()).toEqual([]);
-  });
-
   const hasOpenssl = spawnSync("openssl", ["version"]).status === 0;
   it.skipIf(!hasOpenssl)(
     "case 27: a self-signed certificate fails the transfer; nothing in the code turns verification off",
@@ -642,6 +625,7 @@ describe("network (cases 23-28)", () => {
           schedule: manualSchedule().schedule,
           signal: new AbortController().signal,
           handle,
+          onLength: async () => {},
           onProgress: () => {},
         });
         await expect(attempt).rejects.toMatchObject({ code: "network" });

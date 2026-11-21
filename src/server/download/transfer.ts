@@ -17,13 +17,18 @@ export const IDLE_TIMEOUT_MS = 5 * 60_000;
 
 export interface TransferOptions {
   readonly url: URL;
-  /** The announced size (`link.size`): the response must match it exactly. */
+  /** The catalog estimate (`link.size`, tools.md §3.4 step 3): it only sets the Content-Length band. */
   readonly size: number;
   readonly fetchFn: FetchFn;
   readonly schedule: Schedule;
   readonly signal: AbortSignal;
   readonly handle: HandleLike;
-  readonly onProgress: (bytes: number) => void;
+  /**
+   * Called with the validated `Content-Length` (`cl`) before the first body byte: it re-runs the caps,
+   * the budget and the space check, and throws a `DownloadFailure` to stop the call (T-27).
+   */
+  readonly onLength: (cl: number) => Promise<void>;
+  readonly onProgress: (bytes: number, total: number) => void;
   readonly firstByteMs?: number;
   readonly idleMs?: number;
 }
@@ -31,6 +36,17 @@ export interface TransferOptions {
 export interface TransferResult {
   readonly bytes: number;
   readonly sha256: string;
+}
+
+/** `Content-Length` may exceed the catalog size by 4 times plus this much, never more (T-27). */
+const BAND_FLOOR = 256n * 1024n * 1024n;
+export const clUpperBand = (size: number): bigint => 4n * BigInt(size) + BAND_FLOOR;
+
+/** A strict decimal length of at least 1 that is a safe integer; anything else is undefined. */
+function parseLength(header: string | null): number | undefined {
+  if (header === null || !/^[1-9][0-9]*$/.test(header)) return undefined;
+  const value = Number(header);
+  return Number.isSafeInteger(value) ? value : undefined;
 }
 
 const REDIRECTS: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
@@ -46,8 +62,9 @@ async function writeAll(handle: HandleLike, chunk: Uint8Array): Promise<void> {
 
 /**
  * One GET of the proxy link into `handle` (tools.md §3.4 steps 8 to 10): no redirects, identity
- * encoding only, `Content-Length` equal to the announced size, decoded bytes counted and SHA-256
- * computed on the fly, abort at `size + 1`, first-byte and idle timeouts. Nothing is retried here.
+ * encoding only, a strict `Content-Length` (`cl`) inside the band as the size authority (T-27),
+ * decoded bytes counted and SHA-256 computed on the fly, abort at `cl + 1`, first-byte and idle
+ * timeouts. Nothing is retried here.
  */
 export async function transfer(options: TransferOptions): Promise<TransferResult> {
   const { size, handle } = options;
@@ -88,11 +105,15 @@ export async function transfer(options: TransferOptions): Promise<TransferResult
     if (encoding !== null && encoding.trim().toLowerCase() !== "identity") {
       return await refuse("size_mismatch");
     }
-    const declared = response.headers.get("content-length");
-    if (declared === null || !/^[0-9]+$/.test(declared) || Number(declared) !== size) {
-      return await refuse("size_mismatch");
-    }
+    const cl = parseLength(response.headers.get("content-length"));
+    if (cl === undefined || BigInt(cl) > clUpperBand(size)) return await refuse("size_mismatch");
     if (response.body === null) return await refuse("size_mismatch");
+    try {
+      await options.onLength(cl);
+    } catch (error) {
+      await response.body.cancel().catch(() => undefined);
+      throw error;
+    }
 
     const reader = response.body.getReader();
     const hash = createHash("sha256");
@@ -104,13 +125,13 @@ export async function transfer(options: TransferOptions): Promise<TransferResult
         disarm();
         disarm = arm(options.idleMs ?? IDLE_TIMEOUT_MS);
         bytes += value.byteLength;
-        if (bytes > size) {
+        if (bytes > cl) {
           await reader.cancel().catch(() => undefined);
           throw new DownloadFailure("size_mismatch");
         }
         hash.update(value);
         await writeAll(handle, value);
-        options.onProgress(bytes);
+        options.onProgress(bytes, cl);
       }
     } catch (error) {
       // Whatever the reason, the body and its connection are released before the call fails.
@@ -119,7 +140,7 @@ export async function transfer(options: TransferOptions): Promise<TransferResult
       if (options.signal.aborted || timedOut) throw failed();
       throw error; // a write failure (ENOSPC, EDQUOT) is classified by the caller
     }
-    if (bytes !== size) throw new DownloadFailure("size_mismatch");
+    if (bytes !== cl) throw new DownloadFailure("size_mismatch");
     return { bytes, sha256: hash.digest("hex") };
   } finally {
     disarm();

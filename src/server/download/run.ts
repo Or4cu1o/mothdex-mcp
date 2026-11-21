@@ -142,7 +142,13 @@ const existsResult = (target: string): DownloadResult => ({
 const maxBig = (a: bigint, b: bigint): bigint => (a > b ? a : b);
 
 /** Free space check of tools.md §3.4 step 7, in BigInt. */
-async function ensureSpace(rt: DownloadRuntime, dest: string, size: number): Promise<bigint> {
+async function ensureSpace(
+  rt: DownloadRuntime,
+  dest: string,
+  size: number,
+  /** Bytes this call already holds in the ledger, which must not count against itself. */
+  held = 0n,
+): Promise<bigint> {
   const bytes = BigInt(size);
   const fivePercent = bytes / 20n;
   const floor = 256n * MIB;
@@ -150,7 +156,7 @@ async function ensureSpace(rt: DownloadRuntime, dest: string, size: number): Pro
   const free = await rt.fs.freeBytes(dest).catch((error: unknown) => {
     throw new DownloadFailure("disk_full", codeOf(error));
   });
-  if (free - rt.state.ledger < bytes + margin)
+  if (free - (rt.state.ledger - held) < bytes + margin)
     throw new DownloadFailure("disk_full", "not enough free space");
   return 2n * bytes;
 }
@@ -209,11 +215,26 @@ export async function runDownload(
     const result = await transfer({
       url,
       size,
+      onLength: async (cl) => {
+        // The size authority is Content-Length (T-27): caps, budget and space run again on it, before the body.
+        if (cl > rt.limits.fileBytes) throw new DownloadFailure("size_mismatch");
+        if (!state.lengthFits(size, cl, rt.limits)) throw new DownloadFailure("quota_exceeded");
+        const claim = await ensureSpace(rt, dest, cl, reservedBytes);
+        // One synchronous step: nothing else runs between releasing the old claim and taking the new one.
+        // Charged only now: a call that fails disk_full keeps the estimate in the budget, not cl (Sentinela S1).
+        state.chargeLength(size, cl);
+        state.releaseBytes(reservedBytes);
+        reservedBytes = claim;
+        state.reserveBytes(claim);
+        if (cl * 2 > size * 3 || cl * 2 < size) {
+          rt.log(`download ${jobId} size drift: link ${size}, content-length ${cl}`);
+        }
+      },
       fetchFn: rt.fetchFn,
       schedule: rt.schedule,
       signal,
       handle,
-      onProgress: (bytes) => onProgress(bytes, size),
+      onProgress,
       ...(rt.firstByteMs === undefined ? {} : { firstByteMs: rt.firstByteMs }),
       ...(rt.idleMs === undefined ? {} : { idleMs: rt.idleMs }),
     });
