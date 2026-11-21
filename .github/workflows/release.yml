@@ -1,0 +1,137 @@
+name: Release
+
+# Runs only for version tags. Three jobs with separate permissions:
+# build (read-only repo) -> attest (OIDC + attestations) -> publish (the only job that can write contents).
+# No dependency cache is used anywhere in this workflow (T-4 audit), and dependencies install with the frozen
+# lockfile and no install scripts. Owner-side settings it relies on (environment `release` with required
+# reviewers, tag ruleset for v*) and the release steps are in docs/release.md.
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  SIGNER_WORKFLOW: Or4cu1o/mothdex-mcp/.github/workflows/release.yml
+
+jobs:
+  build:
+    name: build the bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Require a semantic version tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+[.][0-9]+[.][0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "tag '$TAG' is not vX.Y.Z[-pre]"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the tag to be on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false # no dependency cache in the release path
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: The tag, package.json and plugin.json carry the same version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          node scripts/check-versions.mjs
+          [ "v$(node -p "require('./package.json').version")" = "$TAG" ] || { echo "tag $TAG does not match package.json"; exit 1; }
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: The committed dist is the build of this tag
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "the build changed the tree: dist/ is not the build of src" >&2
+            exit 1
+          fi
+      - run: pnpm smoke
+      - name: Stage the release files and checksums
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir release
+          cp dist/mothdex-mcp.mjs "release/mothdex-mcp_${TAG#v}.mjs"
+          (cd release && sha256sum "mothdex-mcp_${TAG#v}.mjs" > checksums.txt)
+          cat release/checksums.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-files
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  attest:
+    name: attest
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: release
+      - name: Attest every file listed in checksums.txt
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: release/checksums.txt
+      - name: Attest checksums.txt itself
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: release/checksums.txt
+
+  publish:
+    name: publish GitHub release
+    needs: [build, attest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: write
+      attestations: read # gh attestation verify
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: release
+      - name: Verify checksums before publishing
+        working-directory: release
+        run: sha256sum --check --strict checksums.txt
+      - name: Verify attestations (signer workflow and tag) before publishing
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          for f in checksums.txt $(awk '{print $2}' checksums.txt); do
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$SIGNER_WORKFLOW" --source-ref "refs/tags/$TAG"
+          done
+      - name: Create the release
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          flags=""
+          case "$TAG" in *-*) flags="--prerelease" ;; esac
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes $flags \
+            "mothdex-mcp_${TAG#v}.mjs" checksums.txt

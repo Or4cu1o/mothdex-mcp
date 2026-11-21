@@ -7,10 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- T-34: release pipeline. `release.yml` runs only for `v*` tags (tag on `main`, versions agree, lint, typecheck, tests,
+  committed dist == build, smoke), attests the bundle and `checksums.txt` (GitHub build provenance) and, after the
+  `release` environment approves, attaches `mothdex-mcp_<version>.mjs` and `checksums.txt` to the GitHub Release. No
+  dependency cache, frozen lockfile, no install scripts, actions pinned by SHA. CI gains the check `dist == build(src)`
+  and validates the marketplace manifest. `docs/release.md` documents verification, owner settings and the release
+  steps, including pinning the marketplace `source` to the tag and commit.
+
 ### Changed
 
-- Plugin contract: `0.0.0` and no committed `dist/` before the first release; the README documents local testing
-  only until T-34.
+- `dist/mothdex-mcp.mjs` is committed (a plugin git install now has its bundle) and excluded from lint. Version is
+  `0.1.0` in `package.json` and `plugin.json` (not tagged yet).
 - Node floor is 22 (`engines`, esbuild target `node22`), the oldest LTS still supported; the tools contract says so.
 - Tools contract: client error kinds map to codes (adds `canceled` and `internal`), Node ≥ 22, and links on trusted
   hosts come first in `resolve_download`.

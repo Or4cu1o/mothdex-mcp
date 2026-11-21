@@ -56,6 +56,31 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  # The committed bundle is what a git install of the plugin runs (T-34), so it is treated like a release input:
+  # rebuilt from src with the frozen lockfile, no dependency cache and no install scripts, and compared byte for byte.
+  dist:
+    name: dist == build(src)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm build
+      - name: The committed dist matches the build of src
+        run: |
+          if [ -n "$(git status --porcelain -- dist)" ]; then
+            git status --short -- dist
+            echo "dist/ is not the build of src: run 'pnpm build' and commit dist/mothdex-mcp.mjs" >&2
+            exit 1
+          fi
+
   audit:
     name: audit
     runs-on: ubuntu-latest
@@ -109,7 +134,9 @@ jobs:
       - name: Install Claude Code
         run: npm install -g --strict-allow-scripts --allow-scripts=@anthropic-ai/claude-code@2.1.330 @anthropic-ai/claude-code@2.1.330
       - name: Validate the plugin and the marketplace
-        run: claude plugin validate . --strict
+        run: |
+          claude plugin validate . --strict
+          claude plugin validate .claude-plugin/marketplace.json --strict
         env:
           CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
 
