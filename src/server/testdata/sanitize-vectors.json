@@ -1,0 +1,490 @@
+{
+ "description": "Vectors for Sanitize (downloader.md 6.1, T-16 section 5): an untrusted file name becomes one safe path component, or an error. Shared with mothdex-mcp, which copies this file and diffs it. Exactly one of output and error is set. error: unsafe_name (executable extension without allow_executable) or empty_name (nothing left and no fallback). fallback is applied only when nothing usable is left of the name.",
+ "version": 1,
+ "vectors": [
+  {
+   "name": "unix traversal",
+   "input": "../../etc/passwd",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "passwd",
+   "error": null
+  },
+  {
+   "name": "windows traversal",
+   "input": "..\\..\\Windows\\x.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "x.zip",
+   "error": null
+  },
+  {
+   "name": "absolute",
+   "input": "/abs/x.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "x.zip",
+   "error": null
+  },
+  {
+   "name": "drive",
+   "input": "C:\\x.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "x.zip",
+   "error": null
+  },
+  {
+   "name": "unc",
+   "input": "\\\\srv\\share\\x.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "x.zip",
+   "error": null
+  },
+  {
+   "name": "subdirs",
+   "input": "dir/sub/x.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "x.zip",
+   "error": null
+  },
+  {
+   "name": "CON",
+   "input": "CON",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "_CON",
+   "error": null
+  },
+  {
+   "name": "con.zip",
+   "input": "con.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "_con.zip",
+   "error": null
+  },
+  {
+   "name": "NUL.tar.gz",
+   "input": "NUL.tar.gz",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "_NUL.tar.gz",
+   "error": null
+  },
+  {
+   "name": "COM1.bin",
+   "input": "COM1.bin",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "_COM1.bin",
+   "error": null
+  },
+  {
+   "name": "COM superscript",
+   "input": "COM¹.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "_COM¹.zip",
+   "error": null
+  },
+  {
+   "name": "LPT9",
+   "input": "LPT9",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "_LPT9",
+   "error": null
+  },
+  {
+   "name": "CONIN$",
+   "input": "CONIN$",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "_CONIN$",
+   "error": null
+  },
+  {
+   "name": "aux space",
+   "input": "aux .zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "_aux .zip",
+   "error": null
+  },
+  {
+   "name": "trailing dot",
+   "input": "game.zip.",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "game.zip",
+   "error": null
+  },
+  {
+   "name": "trailing space",
+   "input": "game.zip ",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "game.zip",
+   "error": null
+  },
+  {
+   "name": "trailing dots and spaces",
+   "input": "game.zip. . .",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "game.zip",
+   "error": null
+  },
+  {
+   "name": "ads",
+   "input": "game.zip:evil",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "game.zip_evil",
+   "error": null
+  },
+  {
+   "name": "data stream",
+   "input": "x::$DATA",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "x_$DATA",
+   "error": null
+  },
+  {
+   "name": "forbidden",
+   "input": "a<b>c|d?e*f\"g.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "a_b_c_d_e_f_g.zip",
+   "error": null
+  },
+  {
+   "name": "control",
+   "input": "a\u0000b\u001b[31mc\u007fd\ne.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "ab[31mcde.zip",
+   "error": null
+  },
+  {
+   "name": "bidi",
+   "input": "game\u202ehs.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "gamehs.zip",
+   "error": null
+  },
+  {
+   "name": "zero width",
+   "input": "ga\u200bme.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "game.zip",
+   "error": null
+  },
+  {
+   "name": "fullwidth slash",
+   "input": "ｇａｍｅ／ｘ.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "ｇａｍｅ_ｘ.zip",
+   "error": null
+  },
+  {
+   "name": "fullwidth colon",
+   "input": "a：b.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "a_b.zip",
+   "error": null
+  },
+  {
+   "name": "NFD",
+   "input": "Pokémon.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "Pokémon.zip",
+   "error": null
+  },
+  {
+   "name": "NFC",
+   "input": "Pokémon.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "Pokémon.zip",
+   "error": null
+  },
+  {
+   "name": "leading dot",
+   "input": ".bashrc",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "bashrc",
+   "error": null
+  },
+  {
+   "name": "leading dash",
+   "input": "-rf.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "rf.zip",
+   "error": null
+  },
+  {
+   "name": "leading space",
+   "input": " x.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "x.zip",
+   "error": null
+  },
+  {
+   "name": "empty with slug",
+   "input": "",
+   "fallback": {
+    "slug": "zelda",
+    "format": "zip",
+    "job_id": "abcdefghijklmnopqrstuvwxyz"
+   },
+   "allow_executable": false,
+   "output": "zelda.zip",
+   "error": null
+  },
+  {
+   "name": "dot",
+   "input": ".",
+   "fallback": {
+    "slug": "zelda",
+    "format": "zip",
+    "job_id": "abcdefghijklmnopqrstuvwxyz"
+   },
+   "allow_executable": false,
+   "output": "zelda.zip",
+   "error": null
+  },
+  {
+   "name": "dotdot",
+   "input": "..",
+   "fallback": {
+    "slug": "zelda",
+    "format": "zip",
+    "job_id": "abcdefghijklmnopqrstuvwxyz"
+   },
+   "allow_executable": false,
+   "output": "zelda.zip",
+   "error": null
+  },
+  {
+   "name": "dots",
+   "input": "...",
+   "fallback": {
+    "slug": "zelda",
+    "format": "zip",
+    "job_id": "abcdefghijklmnopqrstuvwxyz"
+   },
+   "allow_executable": false,
+   "output": "zelda.zip",
+   "error": null
+  },
+  {
+   "name": "spaces",
+   "input": "   ",
+   "fallback": {
+    "slug": "zelda",
+    "format": "zip",
+    "job_id": "abcdefghijklmnopqrstuvwxyz"
+   },
+   "allow_executable": false,
+   "output": "zelda.zip",
+   "error": null
+  },
+  {
+   "name": "lone bidi",
+   "input": "\u202e",
+   "fallback": {
+    "slug": "zelda",
+    "format": "zip",
+    "job_id": "abcdefghijklmnopqrstuvwxyz"
+   },
+   "allow_executable": false,
+   "output": "zelda.zip",
+   "error": null
+  },
+  {
+   "name": "malicious slug",
+   "input": "",
+   "fallback": {
+    "slug": "../x",
+    "format": "zip/../../x",
+    "job_id": "jid"
+   },
+   "allow_executable": false,
+   "output": "x",
+   "error": null
+  },
+  {
+   "name": "empty slug",
+   "input": "",
+   "fallback": {
+    "slug": "",
+    "format": "zip",
+    "job_id": "jobid26"
+   },
+   "allow_executable": false,
+   "output": "download-jobid26",
+   "error": null
+  },
+  {
+   "name": "deny sh",
+   "input": "x.sh",
+   "fallback": null,
+   "allow_executable": false,
+   "output": null,
+   "error": "unsafe_name"
+  },
+  {
+   "name": "deny SH",
+   "input": "x.SH",
+   "fallback": null,
+   "allow_executable": false,
+   "output": null,
+   "error": "unsafe_name"
+  },
+  {
+   "name": "deny double",
+   "input": "x.zip.sh",
+   "fallback": null,
+   "allow_executable": false,
+   "output": null,
+   "error": "unsafe_name"
+  },
+  {
+   "name": "deny desktop",
+   "input": "x.desktop",
+   "fallback": null,
+   "allow_executable": false,
+   "output": null,
+   "error": "unsafe_name"
+  },
+  {
+   "name": "deny AppImage",
+   "input": "x.AppImage",
+   "fallback": null,
+   "allow_executable": false,
+   "output": null,
+   "error": "unsafe_name"
+  },
+  {
+   "name": "deny exe",
+   "input": "x.exe",
+   "fallback": null,
+   "allow_executable": false,
+   "output": null,
+   "error": "unsafe_name"
+  },
+  {
+   "name": "deny bat",
+   "input": "x.bat",
+   "fallback": null,
+   "allow_executable": false,
+   "output": null,
+   "error": "unsafe_name"
+  },
+  {
+   "name": "deny lnk",
+   "input": "x.lnk",
+   "fallback": null,
+   "allow_executable": false,
+   "output": null,
+   "error": "unsafe_name"
+  },
+  {
+   "name": "deny ps1",
+   "input": "x.ps1",
+   "fallback": null,
+   "allow_executable": false,
+   "output": null,
+   "error": "unsafe_name"
+  },
+  {
+   "name": "deny via fallback",
+   "input": "",
+   "fallback": {
+    "slug": "run",
+    "format": "sh",
+    "job_id": "j"
+   },
+   "allow_executable": false,
+   "output": null,
+   "error": "unsafe_name"
+  },
+  {
+   "name": "allow bin",
+   "input": "x.bin",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "x.bin",
+   "error": null
+  },
+  {
+   "name": "allow cue",
+   "input": "x.cue",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "x.cue",
+   "error": null
+  },
+  {
+   "name": "allow iso",
+   "input": "x.iso",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "x.iso",
+   "error": null
+  },
+  {
+   "name": "allow chd",
+   "input": "x.chd",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "x.chd",
+   "error": null
+  },
+  {
+   "name": "allow zip",
+   "input": "x.zip",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "x.zip",
+   "error": null
+  },
+  {
+   "name": "allow 7z",
+   "input": "x.7z",
+   "fallback": null,
+   "allow_executable": false,
+   "output": "x.7z",
+   "error": null
+  },
+  {
+   "name": "allow-executable",
+   "input": "x.sh",
+   "fallback": null,
+   "allow_executable": true,
+   "output": "x.sh",
+   "error": null
+  },
+  {
+   "name": "nothing left and no fallback",
+   "input": "...",
+   "fallback": null,
+   "allow_executable": false,
+   "output": null,
+   "error": "empty_name"
+  }
+ ]
+}

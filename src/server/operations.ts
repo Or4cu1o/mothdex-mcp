@@ -20,7 +20,7 @@ export interface Env {
 export const SAFE_SLUG = /^[a-z0-9][a-z0-9-]{0,255}$/;
 
 /** The entry as answered, or a decode failure (api_incompatible) when its slug is not a safe one. */
-function checkedEntry(op: string, entry: Entry): Entry {
+export function checkedEntry(op: string, entry: Entry): Entry {
   if (!SAFE_SLUG.test(entry.slug)) {
     throw new MothdexError({ kind: "decode", op, detail: "entry slug has an unexpected form" });
   }

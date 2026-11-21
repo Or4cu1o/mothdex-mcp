@@ -225,13 +225,13 @@ The steps of one call, in order. Any failure stops the call; the error codes are
 
 **Finalize**, after the body is verified:
 
-1. `filehandle.sync()`, then `filehandle.chmod(0o644)` on the open staging handle, then close. The hard link carries
-   that mode, and `copyFile` copies the source mode (test 20 asserts both). There is **no path-based `chmod`** on the
+1. `filehandle.sync()`, then `filehandle.chmod(0o644 & ~umask)` on the open staging handle, then close. The hard link
+   carries that mode, and the copy fallback copies the source mode (test 20 asserts both, under any umask). There is **no path-based `chmod`** on the
    final name, because it follows symlinks (Sentinela M1).
 2. Re-check the destination: `realpath(destReal) === destReal`, else `path_rejected`.
 3. `fs.link(part, final)`:
    - `EEXIST` gives `{status: "exists"}`.
-   - `EPERM`, `ENOTSUP`, `EXDEV` or `ENOSYS` fall back to `fs.copyFile(part, final, COPYFILE_EXCL)`, with `EEXIST` again giving `exists`.
+   - `EPERM`, `ENOTSUP`, `EXDEV` or `ENOSYS` fall back to an exclusive copy (`final` created with `O_EXCL`, like `COPYFILE_EXCL`, and removed again if the copy fails midway), with `EEXIST` again giving `exists`.
 4. `unlink(part)`. The file is never made executable.
 
 Two prohibitions:

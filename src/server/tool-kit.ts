@@ -8,7 +8,7 @@ import type { Env } from "./operations";
  * wants `structuredContent.error.code = "invalid_request"`, so the SDK is given the schema for
  * `tools/list` only (same JSON Schema) and always accepts; the tool parses the arguments itself.
  */
-function advertiseOnly(schema: z.ZodType): StandardSchemaWithJSON {
+export function advertiseOnly(schema: z.ZodType): StandardSchemaWithJSON {
   const standard = schema["~standard"];
   return {
     "~standard": { ...standard, validate: (value: unknown) => ({ value }) },
@@ -26,14 +26,14 @@ export interface ToolSpec<I extends z.ZodObject, O extends z.ZodObject> {
   readonly run: (env: Env, args: z.output<I>) => Promise<z.input<O>>;
 }
 
-type Json = Record<string, unknown>;
+export type Json = Record<string, unknown>;
 
-const success = (structuredContent: Json) => ({
+export const success = (structuredContent: Json) => ({
   content: [{ type: "text" as const, text: JSON.stringify(structuredContent) }],
   structuredContent,
 });
 
-function failure(error: unknown) {
+export function failure(error: unknown) {
   const { code, message, retryable, retryAfterS } = toToolError(error);
   const body = {
     error: {
@@ -80,7 +80,7 @@ export function registerReadTool<I extends z.ZodObject, O extends z.ZodObject>(
 }
 
 /** Zod issues reduced to "path: message" lines; never echoes the rejected values. */
-function describeIssues(error: z.ZodError): string {
+export function describeIssues(error: z.ZodError): string {
   return error.issues
     .slice(0, 5)
     .map((issue) => `${issue.path.join(".") || "arguments"}: ${issue.message}`)

@@ -12,7 +12,16 @@ export type ToolErrorCode =
   /** The client cancelled the request (notifications/cancelled); normally never sent. */
   | "canceled"
   /** A bug on our side (cli-output.md §4 `internal`); not in the tools.md list yet. */
-  | "internal";
+  | "internal"
+  // download_file only (tools.md §3.8)
+  | "no_destination"
+  | "untrusted_url"
+  | "unsafe_name"
+  | "size_mismatch"
+  | "path_rejected"
+  | "disk_full"
+  | "busy"
+  | "quota_exceeded";
 
 export interface ToolError {
   readonly code: ToolErrorCode;
@@ -26,6 +35,37 @@ export class InvalidRequest extends Error {
   constructor(message: string) {
     super(message);
     this.name = "InvalidRequest";
+  }
+}
+
+/** Fixed message and retryability per `download_file` code: nothing from upstream or Node reaches the model. */
+export const DOWNLOAD_FAILURES = {
+  no_destination: ["the download folder is not available", false],
+  untrusted_url: ["the link is not on the download host", false],
+  unsafe_name: ["the file name is not allowed", false],
+  size_mismatch: ["the transfer did not match the announced size", false],
+  path_rejected: ["the file could not be placed safely in the download folder", false],
+  disk_full: ["not enough disk space", false],
+  busy: ["another download is running", true],
+  quota_exceeded: ["the download budget of this server run is used up", false],
+  invalid_request: ["invalid request", false],
+  not_found: ["entry or file not found", false],
+  upstream: ["the file host answered with an error", true],
+  network: ["the file transfer failed on the network", true],
+  untrusted_redirect: ["the file host redirected the request", false],
+  canceled: ["the request was canceled", false],
+  internal: ["unexpected internal error", false],
+} as const satisfies Readonly<Record<string, readonly [string, boolean]>>;
+
+/** A `download_file` failure: the code picks the fixed message; detail only ever goes to the stderr log. */
+export class DownloadFailure extends Error {
+  readonly code: keyof typeof DOWNLOAD_FAILURES;
+  readonly detail: string | undefined;
+  constructor(code: keyof typeof DOWNLOAD_FAILURES, detail?: string) {
+    super(DOWNLOAD_FAILURES[code][0]);
+    this.name = "DownloadFailure";
+    this.code = code;
+    this.detail = detail;
   }
 }
 
@@ -53,6 +93,13 @@ const RETRYABLE: ReadonlySet<ErrorKind> = new Set(["network", "upstream", "rate_
 export function toToolError(error: unknown): ToolError {
   if (error instanceof InvalidRequest) {
     return { code: "invalid_request", message: error.message, retryable: false };
+  }
+  if (error instanceof DownloadFailure) {
+    return {
+      code: error.code,
+      message: error.message,
+      retryable: DOWNLOAD_FAILURES[error.code][1],
+    };
   }
   if (isMothdexError(error)) {
     const code = CODES[error.kind];

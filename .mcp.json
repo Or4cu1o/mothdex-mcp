@@ -2,7 +2,11 @@
   "mcpServers": {
     "mothdex": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/mothdex-mcp.mjs"]
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/mothdex-mcp.mjs"],
+      "env": {
+        "MOTHDEX_MCP_ENABLE_DOWNLOAD": "1",
+        "MOTHDEX_DOWNLOAD_DIR": "${user_config.download_dir}"
+      }
     }
   }
 }

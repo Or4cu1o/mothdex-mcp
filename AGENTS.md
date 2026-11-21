@@ -4,9 +4,9 @@ Guidance for humans and coding agents working in this repository.
 
 ## Project
 
-`mothdex-mcp`: MCP server (TypeScript, stdio) for the Mothdex API v1. Status:
-pre-alpha skeleton. The MCP SDK is not a dependency yet. Plugin packaging
-(`.claude-plugin/`, `.mcp.json`, `skills/`) is not part of the skeleton.
+`mothdex-mcp`: MCP server (TypeScript, stdio) for the Mothdex API v1. Status: pre-alpha. Read tools, resources and
+prompts work; `download_file` is opt-in (`src/server/download/`, tools.md §3). Plugin packaging is in
+`.claude-plugin/`, `.mcp.json` and `skills/`.
 
 Node baseline: `engines.node >=22` and the esbuild target `node22` (the oldest LTS still supported; Node 20 is end
 of life; tools.md decision). CI and `.node-version` use 26. `@types/node` 26 can expose APIs missing on Node 22, so

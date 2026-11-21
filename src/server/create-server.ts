@@ -3,6 +3,8 @@ import { type Clock, MothdexClient } from "../api";
 import { TtlCache } from "./cache";
 import { Catalog } from "./catalog";
 import type { ServerConfig } from "./config";
+import type { DownloadRuntime } from "./download/run";
+import { registerDownloadTool } from "./download/tool";
 import type { Env } from "./operations";
 import { registerPrompts } from "./prompts";
 import { registerResources } from "./resources";
@@ -15,6 +17,8 @@ export interface ServerDeps {
   readonly clock?: Clock;
   /** Operator warnings; stderr by default (stdout belongs to the protocol). */
   readonly warn?: (message: string) => void;
+  /** Set only when the opt-in conditions of tools.md §3.1 hold; then `download_file` is registered. */
+  readonly download?: DownloadRuntime;
 }
 
 /** The catalog tools, resources and prompts never change while the server runs (tools.md §4). */
@@ -55,6 +59,9 @@ export function createServerFactory(deps: ServerDeps): () => McpServer {
       { capabilities: STATIC_CAPABILITIES },
     );
     registerTools(server, makeEnv);
+    if (deps.download !== undefined) {
+      registerDownloadTool(server, makeEnv, deps.download, deps.clock ?? SYSTEM_CLOCK);
+    }
     registerResources(server, makeEnv);
     registerPrompts(server);
     return server;
