@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "build": "node scripts/build.mjs",
-    "check:fixtures": "node scripts/check-fixtures.mjs"
+    "check:fixtures": "node scripts/check-fixtures.mjs",
+    "smoke": "node scripts/smoke-stdio.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.7",
