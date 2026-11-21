@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Plugin contract: `0.0.0` and no committed `dist/` before the first release; the README documents local testing
+  only until T-34.
 - Node floor is 22 (`engines`, esbuild target `node22`), the oldest LTS still supported; the tools contract says so.
 - Tools contract: client error kinds map to codes (adds `canceled` and `internal`), Node ≥ 22, and links on trusted
   hosts come first in `resolve_download`.
