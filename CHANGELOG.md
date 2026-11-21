@@ -20,8 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   downloads) and the `download` skill uses the tool only on an explicit request. Distribution (npm, `.mcpb`,
   `server.json`) is a separate change. Review fixes: a child named `..x` is no longer taken for a parent in the deny-list,
   more system roots are denied, a failed write releases the response body, SIGTERM, SIGINT and SIGHUP remove the staging
-  file before exiting, the copy fallback removes a partial final file, and a link error other than the fallback codes is
-  `path_rejected`.
+  file before exiting, the copy fallback removes a partial final file, a link error other than the fallback codes is
+  `path_rejected`, and the final mode is 0644 minus the umask.
 - Contracts (MCP-19-arch): tools.md §3 records the T-62 behaviour. An unset enable flag is silent, a preflight `lstat` returns `exists` before any connection, and the swapped-folder `.part` residual (case 16) is documented.
 - Contracts (T-61): the `download_file` empty-name fallback uses the call's staging random part as `jobID`, and the shared `sanitize-vectors.json` fixture (mothdex-cli e8f79f6) applies as written, except that `allow_executable` vectors give `unsafe_name`.
 - Contracts (T-61): `download_file` in tools.md §3 (registration, destination, input, link and transfer rules, staging and no-replace finalize, budgets, output, error codes, tests) and v0.2 distribution in plugin.md §5 (folder-as-opt-in, npm package rules, release order with trusted publishing, `.mcpb` and `server.json`), from Sentinela's T-60 CRs and D26.
