@@ -125,7 +125,7 @@ This section replaces the v0.1 sketch. Every rule is a MUST, and the CR it close
 
 The conditions:
 
-1. `MOTHDEX_MCP_ENABLE_DOWNLOAD` is exactly `"1"`, with no trimming (`true`, `yes`, ` 1` all fail).
+1. `MOTHDEX_MCP_ENABLE_DOWNLOAD` is exactly `"1"`, with no trimming (`true`, `yes`, ` 1` all fail). When it is unset, the tool is off with no warning, because off is the default.
 2. `MOTHDEX_DOWNLOAD_DIR` passes §3.2. **No other destination exists**: MCP roots are never read for downloads (D26 OD-1, CR-2).
 3. `NODE_TLS_REJECT_UNAUTHORIZED` is not `"0"` (MT-19). The server never builds a fetch dispatcher that weakens TLS.
 4. The optional caps parse (§3.6). An unparsable or out-of-range value leaves the tool unregistered, so it fails closed.
@@ -195,6 +195,8 @@ The steps of one call, in order. Any failure stops the call; the error codes are
 5. **Reservation.** The name is reserved in process, keyed by `NFC(name).toLowerCase()` with full Unicode case folding (CR-7).
    - It is held until the call ends.
    - A held key is `exists`.
+   - **Preflight exists check** (T-62): an `lstat` of the final name right after the reservation returns `exists` before
+     any budget is spent or any connection is opened. Finalize stays no-replace, so this only saves a transfer.
 6. **Concurrency** is 1 per process.
    - A second call while one is active returns `busy` (`retryable: true`) at once.
    - There is no queue, so a stalled proxy cannot pile up waiting calls.
@@ -326,6 +328,9 @@ T-60 §6 cases 1-39 are the required test list for Bigorna's PR. Case 6 is dropp
   calls `download_file` only when it is registered and the user asked to download, otherwise it prints the CLI command.
 - **Confirmed by Sentinela (T-61):** the started-transfers cap (§3.6), the minimal result shape (§3.7), and the
   folder-as-opt-in mapping (plugin.md §5.1).
+- **Residual (T-62, case 16):** if the folder is swapped for a symlink during a transfer, finalize refuses with
+  `path_rejected`. The `.part` file stays in the renamed real folder, because Node has no `openat`; the startup cleanup
+  removes it after 24 h.
 - **Unverified:** client tool timeouts during a silent warm-up (§3.7); Windows junction realpath (test 17); `fs.link`
   on FAT/exFAT (the copy fallback covers it).
 
