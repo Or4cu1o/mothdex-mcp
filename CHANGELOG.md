@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `download_file` contract (T-27, tools.md §3.4, T-60): the proxy's `Content-Length` is the size authority, because the maintainer states `link.size` is scraped and only a rough indicator (cavv-dev/mothdex-api#1). The length is required and strict, capped by the fixed `CL_UPPER_BAND = 4 × link.size + 256 MiB`, and the per-file cap, the total-bytes budget and the space check re-run on it before the body; `bytes` and progress `total` equal it. `link.size` stays a preflight estimate.
 - T-24b: `release.yml` `publish` checks the tag against the built commit as its last step before the release is created
   (one API call per object), and refuses to upload files that `checksums.txt` does not list, same as mothdex-cli.
 
