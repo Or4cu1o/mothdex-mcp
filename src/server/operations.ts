@@ -9,6 +9,8 @@ export interface Env {
   readonly catalog: Catalog;
   readonly allowedHosts: ReadonlySet<string>;
   readonly signal?: AbortSignal;
+  /** One line for the operator (stderr); never carries API text. */
+  readonly warn?: (message: string) => void;
 }
 
 /**
@@ -58,12 +60,15 @@ export async function searchEntries(
     { ...toFilters(args), maxResults: args.page_size, page: args.page },
     env.signal,
   );
+  const safe = response.results.filter((entry) => SAFE_SLUG.test(entry.slug));
+  const dropped = response.results.length - safe.length;
+  if (dropped > 0) env.warn?.(`search dropped ${dropped} entries with an unsafe slug`);
   const empty = response.totalResults === 0;
   return {
     page: empty ? 1 : response.currentPage,
     total_pages: empty ? 0 : response.totalPages,
     total_results: response.totalResults,
-    results: response.results.filter((entry) => SAFE_SLUG.test(entry.slug)).map(entrySummary),
+    results: safe.map(entrySummary),
   };
 }
 

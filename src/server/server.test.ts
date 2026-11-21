@@ -170,8 +170,13 @@ describe("slugs from the API", () => {
   it("search drops such an entry from the results", async () => {
     const search = JSON.parse(fixture("search.json"));
     search.data.results[0].slug = evil;
-    const h = await start({ body: JSON.stringify(search) });
+    const warnings: string[] = [];
+    harness = await startHarness([{ body: JSON.stringify(search) }], (message) =>
+      warnings.push(message),
+    );
+    const h = harness;
     const result = await call(h, "search_entries", { query: "doom" });
+    expect(warnings).toEqual(["search dropped 1 entries with an unsafe slug"]);
     const slugs = (result.structuredContent as { results: { slug: string }[] }).results.map(
       (r) => r.slug,
     );

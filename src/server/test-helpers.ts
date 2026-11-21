@@ -13,7 +13,10 @@ export interface Harness {
 }
 
 /** A real MCP client talking to the server over an in-memory pipe; the API answers from `script`. */
-export async function startHarness(script: readonly Scripted[]): Promise<Harness> {
+export async function startHarness(
+  script: readonly Scripted[],
+  warn: (message: string) => void = () => {},
+): Promise<Harness> {
   const { client, clock, seen } = makeClient(script);
   const server = createServerFactory({
     config: {
@@ -24,6 +27,7 @@ export async function startHarness(script: readonly Scripted[]): Promise<Harness
     version: "0.0.0-test",
     client,
     clock,
+    warn,
   })();
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   const mcp = new Client({ name: "test", version: "0" });
