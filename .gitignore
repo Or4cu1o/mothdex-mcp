@@ -1,6 +1,5 @@
-# Build output (committing dist is decided in T-34)
+# Build output. dist/mothdex-mcp.mjs is committed on purpose (plugin git install; CI checks dist == build(src))
 node_modules/
-dist/
 coverage/
 *.tsbuildinfo
 *.mcpb

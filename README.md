@@ -28,14 +28,14 @@ Configuration is environment only: `MOTHDEX_API_BASE_URL` (default `https://api.
 ## Planned
 
 - [ ] Opt-in, directory-confined file download tool (off by default)
-- [ ] Claude Code plugin and marketplace
+- [x] Claude Code plugin and marketplace (pinned to a release tag after `v0.1.0`)
 - [ ] Claude Desktop `.mcpb` package and MCP registry entry
-- [ ] Single-file bundle without runtime dependencies
+- [x] Single-file bundle without runtime dependencies, attached to each release with checksums and provenance
 
 ## Install in Claude Code
 
-The plugin installs from the first release (T-34). Until then a git install has no `dist/mothdex-mcp.mjs`, so the
-server would not start. Once released:
+The bundle `dist/mothdex-mcp.mjs` is committed, so a git install works. From the first release the marketplace entry is
+pinned to the release tag and commit ([docs/release.md](docs/release.md)):
 
 ```text
 /plugin marketplace add Or4cu1o/mothdex-mcp

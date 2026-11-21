@@ -18,3 +18,8 @@ reporter and disclosed within 90 days of the report at the latest.
 Of particular interest: anything that lets an LLM or a remote response control
 file paths or contents written to disk, handling of data returned by the API,
 and the integrity of release artifacts (the bundle) and the CI pipeline.
+
+## Verifying releases
+
+Each release attaches `mothdex-mcp_<version>.mjs` and `checksums.txt` with GitHub build-provenance attestations. The
+commands, and what the pipeline checks before publishing, are in [docs/release.md](docs/release.md).
