@@ -221,7 +221,7 @@ export async function runDownload(
         if (!state.lengthFits(size, cl, rt.limits)) throw new DownloadFailure("quota_exceeded");
         const claim = await ensureSpace(rt, dest, cl, reservedBytes);
         // One synchronous step: nothing else runs between releasing the old claim and taking the new one.
-        // The budget is charged only now, so a call that fails disk_full leaves it at the estimate.
+        // Charged only now: a call that fails disk_full keeps the estimate in the budget, not cl (Sentinela S1).
         state.chargeLength(size, cl);
         state.releaseBytes(reservedBytes);
         reservedBytes = claim;

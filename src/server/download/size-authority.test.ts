@@ -24,6 +24,7 @@ describe("Content-Length as the size authority (T-27)", () => {
     ["a decimal", "5.0"],
     ["an exponent", "1e3"],
     ["a leading zero", "05"],
+    ["duplicated (fetch joins them)", "10, 10"],
     ["above the safe integers", "9007199254740993"],
   ])("case 25: a %s Content-Length is size_mismatch with the body unread", async (_l, length) => {
     const r = rig({
@@ -185,5 +186,37 @@ describe("Content-Length as the size authority (T-27)", () => {
     });
     expect((await r.run({ link_index: 1 })).status).toBe("done"); // charged MIB - 100, not 10
     expect(await code(r.run({ link_index: 2 }))).toBe("quota_exceeded"); // 200 more crosses the cap
+  });
+
+  const roomy = { freeBytes: async () => BigInt(2 ** 50) };
+
+  it("case 37b: cl exactly equal to the per-file cap is accepted", async () => {
+    const r = rig({
+      links: [rawLink({ size: MIB })],
+      limits: { MOTHDEX_DOWNLOAD_MAX_FILE_BYTES: String(MIB) },
+      fs: roomy,
+      replies: [{ chunks: [body(MIB)] }],
+    });
+    expect(await r.run()).toMatchObject({ status: "done", bytes: MIB });
+  });
+
+  it("case 32: cl exactly filling the total budget is accepted, one byte more is quota_exceeded", async () => {
+    const limits = {
+      MOTHDEX_DOWNLOAD_MAX_TOTAL_BYTES: String(2 * MIB),
+      MOTHDEX_DOWNLOAD_MAX_FILE_BYTES: String(2 * MIB),
+    };
+    for (const [extra, expected] of [
+      [0, "no error"],
+      [1, "quota_exceeded"],
+    ] as const) {
+      const r = rig({
+        links: [rawLink({ size: 10 })],
+        limits,
+        fs: roomy,
+        replies: [{ chunks: [body(MIB + extra)] }],
+      });
+      r.rt.state.noteStarted(MIB); // MIB already spent: cl of MIB fills the total exactly
+      expect(await code(r.run())).toBe(expected);
+    }
   });
 });
