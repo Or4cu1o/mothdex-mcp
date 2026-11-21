@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `docs/release.md`: owner checklist for the first release v0.1.0 (gates, settings, prepare PR, tag, verification of the
+  published assets, marketplace pin, rollback) and what was not verified yet (T-23).
 - T-60: threat model for the `download_file` tool and the v0.2.0 distribution (`docs/security/`), by Sentinela. It sets
   the contract changes (CR-1..CR-18) that must land before any download code.
 - T-34: release pipeline. `release.yml` runs only for `v*` tags (tag on `main`, versions agree, lint, typecheck, tests,
