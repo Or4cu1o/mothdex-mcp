@@ -1,6 +1,6 @@
 # Contract: `mothdex-mcp` tools, resources and prompts
 
-Status: v1 read tools (T-2 phase 1), v1 `download_file` (T-61) · Owner: Alicerce · Implementers: Forja (T-30, T-31), Bigorna (§3) · Risk: Medium (read-only), **High** (§3)
+Status: v1 read tools (T-2 phase 1), v1 `download_file` (T-61; size authority T-27) · Owner: Alicerce · Implementers: Forja (T-30, T-31), Bigorna (§3) · Risk: Medium (read-only), **High** (§3)
 Plugin packaging (`.claude-plugin/`, `.mcp.json`, `.mcpb`, `server.json`) is **phase 2** (waits for Sonda T-1c/d).
 
 ## 1. Ground rules
@@ -184,7 +184,8 @@ The steps of one call, in order. Any failure stops the call; the error codes are
    - Every field is validated at use, cached data included (test 29).
 2. **Host.** `isTrustedHost(url, MOTHDEX_ALLOWED_HOSTS)` **and** a URL host exactly `proxy.mothdex.net`, whatever `MOTHDEX_ALLOWED_HOSTS` says (D16, until E-v0.2-hosts).
    - Otherwise `untrusted_url`, and no connection is opened.
-3. **Size.** `link.size` must be a safe integer, at least 1, and at most the per-file cap. Otherwise `invalid_request`, and no connection is opened.
+3. **Size estimate.** `link.size` must be a safe integer, at least 1, and at most the per-file cap. Otherwise `invalid_request`, and no connection is opened.
+   - `link.size` is scraped by upstream and only a rough indicator (cavv-dev/mothdex-api#1, T-27). It is used only for this check, the step 7 estimate and the §3.6 pre-checks; `Content-Length` (step 9) is the size authority.
 4. **Name.** `Sanitize(link.filename)` is a byte-exact TS port of mothdex-cli downloader.md §6.1 (T-16 §5): the same steps, the same 200-byte limit, the same empty-name fallback: `Sanitize(slug).format`, then `download-<jobID>`. In MCP, `jobID` is the 26-character
    base32 random part of the call's staging name (§3.5).
    - It checks against the shared fixture `sanitize-vectors.json` (F-1, mothdex-cli `internal/proxy/testdata/`, e8f79f6),
@@ -200,7 +201,7 @@ The steps of one call, in order. Any failure stops the call; the error codes are
 6. **Concurrency** is 1 per process.
    - A second call while one is active returns `busy` (`retryable: true`) at once.
    - There is no queue, so a stalled proxy cannot pile up waiting calls.
-7. **Space** (CR-10). `fs.statfs(destReal)` must report `bavail × bsize − ledger ≥ size + max(size × 5 %, 256 MiB)`, in BigInt arithmetic. Otherwise `disk_full`.
+7. **Space** (CR-10), estimated with `size = link.size` and checked again with `cl` in step 9. `fs.statfs(destReal)` must report `bavail × bsize − ledger ≥ size + max(size × 5 %, 256 MiB)`, in BigInt arithmetic. Otherwise `disk_full`.
    - The ledger reserves `2 × size` until the call ends, because the copy fallback (§3.5) needs twice the space. The
      preflight checks only `size` plus margin, so the copy fallback can still hit `ENOSPC`; that is `disk_full` with
      the cleanup of §3.5.
@@ -208,10 +209,16 @@ The steps of one call, in order. Any failure stops the call; the error codes are
 9. **Response checks**, all before the body is read:
    - Any 3xx is `untrusted_redirect`, not retried.
    - Any status other than 200 is `upstream` (404 is `not_found`).
-   - `Content-Encoding` must be absent or `identity`, otherwise `size_mismatch` (F6).
-   - `Content-Length` must be present and equal `link.size`, otherwise `size_mismatch`.
+   - `Content-Encoding` must be absent or `identity`, otherwise `size_mismatch` (F6). This comes first, because `Content-Length` is now the only length.
+   - **Length (T-27).** `Content-Length` must be present and match `/^[1-9][0-9]*$/`, and `Number(value)` must be a safe integer. A missing, chunked, `0` or malformed length is `size_mismatch`. Call the value `cl`.
+   - **Band.** `cl > CL_UPPER_BAND`, where `CL_UPPER_BAND = 4 × link.size + 256 MiB` (BigInt), is `size_mismatch`. The constant is fixed and not configurable. A model-driven call has no per-size consent, so a catalog-small entry must not arrive huge. A smaller `cl` is always accepted, because scraper unit errors are common. Such rare valid links can still be fetched with the CLI.
+   - **Caps.** `cl` above the per-file cap is `size_mismatch`. If charging `cl` instead of `link.size` to the §3.6 total-bytes budget crosses it, that is `quota_exceeded`.
+   - **Space again.** The step 7 check re-runs with `cl`, and the ledger claim is swapped to `2 × cl` in the same synchronous step. Failure is `disk_full`.
+   - **Drift.** When `cl > 1.5 × link.size` or `cl < link.size / 2`, one stderr log line records both values. This is never an error.
+   - A failure here cancels the response body unread.
 10. **Body.** Decoded bytes are counted while SHA-256 (`crypto.createHash`) is computed on the fly.
-    - The transfer aborts with `size_mismatch` at byte `size + 1`, or when the stream ends short.
+    - The transfer aborts with `size_mismatch` at byte `cl + 1`, or when the stream ends short of `cl`.
+    - The exact length proves transport self-consistency only: `cl` and the body come from the same proxy. It no longer detects the proxy serving a different file than the catalog lists. The residual stays T-60 MT-20, because upstream hashes are parked (T-27).
     - The first-byte timeout is 10 min (the proxy warms up, A2) and the idle timeout is 5 min, the mothdex-cli defaults. Both are fixed; either one is `network`, retryable.
     - The server never retries a transfer. The model may call again within the budget.
 11. **Content.** `crc` is always `"skipped"` in v0.2 (D26 OD-2): there is no zip reader and no extraction. `Content-Type` is never trusted.
@@ -247,12 +254,12 @@ Two prohibitions:
 
 ### 3.6 Budgets (CR-4, CR-10; MT-05, MT-15)
 
-| Limit                                                             | Value  | Env override                                                       |
-| ----------------------------------------------------------------- | ------ | ------------------------------------------------------------------ |
-| completed downloads (`status: "done"`) per process                | 20     | none                                                               |
-| started transfers (a connection opened) per process               | 60     | none; this bounds failure loops against the proxy                  |
-| total bytes per process (sum of `link.size` of started transfers) | 64 GiB | `MOTHDEX_DOWNLOAD_MAX_TOTAL_BYTES`, integer 1 MiB..1 TiB           |
-| bytes per file                                                    | 64 GiB | `MOTHDEX_DOWNLOAD_MAX_FILE_BYTES`, integer 1 MiB..256 GiB, ≤ total |
+| Limit                                                                                            | Value  | Env override                                                       |
+| ------------------------------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------ |
+| completed downloads (`status: "done"`) per process                                               | 20     | none                                                               |
+| started transfers (a connection opened) per process                                              | 60     | none; this bounds failure loops against the proxy                  |
+| total bytes per process (sum of `cl` of started transfers; `link.size` before the headers, T-27) | 64 GiB | `MOTHDEX_DOWNLOAD_MAX_TOTAL_BYTES`, integer 1 MiB..1 TiB           |
+| bytes per file                                                                                   | 64 GiB | `MOTHDEX_DOWNLOAD_MAX_FILE_BYTES`, integer 1 MiB..256 GiB, ≤ total |
 
 - A call that would cross any limit is `quota_exceeded` (`retryable: false`). It fetches nothing, and the limit holds until the server restarts.
 - The started-transfers cap is an addition to T-60, confirmed by Sentinela (T-61).
@@ -263,7 +270,7 @@ Two prohibitions:
 outputSchema: z.object({
   status: z.enum(["done", "exists"]),
   path: z.string(), // absolute: destReal + sanitized name (the existing file for "exists")
-  bytes: z.number().int(), // bytes written; 0 for "exists"
+  bytes: z.number().int(), // bytes written, equal to cl; 0 for "exists"
   sha256: z
     .string()
     .regex(/^[0-9a-f]{64}$/)
@@ -289,7 +296,7 @@ outputSchema: z.object({
 **Progress.** Sent only when the request has a `progressToken`:
 
 - at most 1 notification per second (injected clock in tests);
-- `progress` = bytes so far and `total` = `link.size`, numbers only;
+- `progress` = bytes so far and `total` = `cl`, numbers only;
 - strictly increasing, so nothing is sent while the proxy warms up;
 - none after the result.
 
@@ -299,16 +306,16 @@ Whether clients time out a silent 10-minute warm-up is **Unverified**. Bigorna r
 
 They are added to the §1 table and come from mothdex-cli cli-output §4 where it has them:
 
-| `code`           | When                                                                        | `retryable` |
-| ---------------- | --------------------------------------------------------------------------- | ----------- |
-| `no_destination` | destination invalid at call time (§3.2)                                     | false       |
-| `untrusted_url`  | link host not allowed (§3.4 step 2)                                         | false       |
-| `unsafe_name`    | deny-listed extension (§3.4 step 4)                                         | false       |
-| `size_mismatch`  | length, encoding or byte count differs (§3.4 steps 9 and 10)                | false       |
-| `path_rejected`  | staging name taken twice, or the destination changed before finalize (§3.5) | false       |
-| `disk_full`      | statfs preflight, `ENOSPC` or `EDQUOT`                                      | false       |
-| `busy`           | another download is running (§3.4 step 6)                                   | true        |
-| `quota_exceeded` | §3.6                                                                        | false       |
+| `code`           | When                                                                                                      | `retryable` |
+| ---------------- | --------------------------------------------------------------------------------------------------------- | ----------- |
+| `no_destination` | destination invalid at call time (§3.2)                                                                   | false       |
+| `untrusted_url`  | link host not allowed (§3.4 step 2)                                                                       | false       |
+| `unsafe_name`    | deny-listed extension (§3.4 step 4)                                                                       | false       |
+| `size_mismatch`  | length missing, malformed or above the band or cap, encoding, or byte count differs (§3.4 steps 9 and 10) | false       |
+| `path_rejected`  | staging name taken twice, or the destination changed before finalize (§3.5)                               | false       |
+| `disk_full`      | statfs preflight, `ENOSPC` or `EDQUOT`                                                                    | false       |
+| `busy`           | another download is running (§3.4 step 6)                                                                 | true        |
+| `quota_exceeded` | §3.6                                                                                                      | false       |
 
 `exists` is a **status, not an error** (`isError: false`).
 
