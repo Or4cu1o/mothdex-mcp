@@ -64,3 +64,45 @@ that path (the attestation is looked up by the file's digest, not its name).
    Users then install exactly the attested tag; the next release repeats step 3. Local development keeps using
    `source: "./"` in a scratch marketplace or with `claude --plugin-dir .`. Do not announce the plugin before step 3 is
    merged. For the first release, merge nothing between the tag and the pin PR, so `main` is the tag commit plus the pin.
+
+## First release v0.1.0: owner checklist (T-34-owner, T-23)
+
+Prepared at main `bf994da`. **OWNER OK** marks a settings change, the tag or a publish. `release.yml` has never run on a tag.
+
+1. **Gates before the tag.** CI green on `main` (including `dist == build(src)`, `actionlint`, marketplace validation);
+   gitleaks clean; the agents' bot identity replaces the owner identity (D14, **OWNER OK**, owner decision open: which
+   account, and whether it may create the tag given the ruleset below).
+2. **Settings (OWNER OK):** environment `release` with the owner as required reviewer, restricted to tags `v*`; tag ruleset
+   for `v*` (creation only by the owner or the bot, update and deletion blocked); `dist == build(src)` as a required check
+   on `main`; recommended, immutable releases.
+3. **Prepare PR:** `package.json` and `.claude-plugin/plugin.json` are already `0.1.0`
+   (`node scripts/check-versions.mjs`); move the CHANGELOG `[Unreleased]` entries under `## [0.1.0] - <date>`;
+   `pnpm build` must leave `dist/mothdex-mcp.mjs` unchanged; check the plugin with `claude --plugin-dir .`. Merge, note the
+   full SHA of the merge commit (`git rev-parse origin/main`).
+4. **Tag (OWNER OK):** `git tag -a v0.1.0 -m "mothdex-mcp v0.1.0" <sha> && git push origin v0.1.0` (never `--force`).
+   Approve the `release` environment in the Actions run only after `build` and `attest` are green.
+5. **Verify the published release** (empty directory):
+
+   ```sh
+   gh release download v0.1.0 --repo Or4cu1o/mothdex-mcp          # expect 2 files: mothdex-mcp_0.1.0.mjs, checksums.txt
+   sha256sum --check --strict checksums.txt
+   gh attestation verify checksums.txt --repo Or4cu1o/mothdex-mcp \
+     --signer-workflow Or4cu1o/mothdex-mcp/.github/workflows/release.yml --source-ref refs/tags/v0.1.0 \
+     --source-digest <full sha of the tag commit> --deny-self-hosted-runners
+   gh attestation verify mothdex-mcp_0.1.0.mjs  # same flags
+   cmp mothdex-mcp_0.1.0.mjs <(git show v0.1.0:dist/mothdex-mcp.mjs)   # in a clone: asset == committed dist
+   ```
+
+   There is no cosign signature and no SBOM in this repo's release; the attestation is the provenance.
+6. **Pin PR** (step 3 of the release steps above): marketplace `source` to the tag and commit, validate with
+   `claude plugin validate .claude-plugin/marketplace.json --strict`. Merge nothing between the tag and this PR; do not
+   announce the plugin before it merges. After the pin, install from the marketplace once and check
+   `<plugin dir>/dist/mothdex-mcp.mjs` with `gh attestation verify` (same flags).
+7. **Rollback.** Failure before `publish`: nothing published; fix, merge, use a **new** tag (`v0.1.1`), never move
+   `v0.1.0`. Published but wrong: `gh release edit v0.1.0 --prerelease`, point the marketplace pin back to the last good
+   tag (or remove the plugin entry) in a PR, ship `v0.1.1`; deleting a release or tag needs the owner's OK. No long-lived
+   secrets are involved (OIDC), so there is nothing to rotate.
+
+Verified while preparing this: `actionlint` (pinned image) clean; `release.yml` read against these steps. **Not
+verified:** any real tag run (`gh attestation verify`, the tag-to-commit check, `--verify-tag`, the environment approval), and
+the marketplace install from the pinned tag.
