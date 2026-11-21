@@ -1,4 +1,4 @@
-import type { Filters } from "../api";
+import { type Entry, type Filters, MothdexError } from "../api";
 import type { Catalog } from "./catalog";
 import { InvalidRequest } from "./errors";
 import { entrySummary, linkSummary } from "./format";
@@ -9,6 +9,20 @@ export interface Env {
   readonly catalog: Catalog;
   readonly allowedHosts: ReadonlySet<string>;
   readonly signal?: AbortSignal;
+}
+
+/**
+ * Slugs from the API end up in command lines the model prints, so only this shape is passed on:
+ * lowercase words and digits joined by dashes (Sentinela, PR #8). Anything else is untrusted data.
+ */
+export const SAFE_SLUG = /^[a-z0-9][a-z0-9-]{0,255}$/;
+
+/** The entry as answered, or a decode failure (api_incompatible) when its slug is not a safe one. */
+function checkedEntry(op: string, entry: Entry): Entry {
+  if (!SAFE_SLUG.test(entry.slug)) {
+    throw new MothdexError({ kind: "decode", op, detail: "entry slug has an unexpected form" });
+  }
+  return entry;
 }
 
 export interface FilterArgs {
@@ -49,12 +63,12 @@ export async function searchEntries(
     page: empty ? 1 : response.currentPage,
     total_pages: empty ? 0 : response.totalPages,
     total_results: response.totalResults,
-    results: response.results.map(entrySummary),
+    results: response.results.filter((entry) => SAFE_SLUG.test(entry.slug)).map(entrySummary),
   };
 }
 
 export async function getEntry(env: Env, args: { slug: string; offset: number; limit: number }) {
-  const entry = await env.catalog.entry(args.slug, env.signal);
+  const entry = checkedEntry("entry", await env.catalog.entry(args.slug, env.signal));
   const page = entry.links.slice(args.offset, args.offset + args.limit);
   return {
     entry: {
@@ -67,7 +81,7 @@ export async function getEntry(env: Env, args: { slug: string; offset: number; l
 }
 
 export async function randomEntry(env: Env, args: FilterArgs) {
-  const entry = await env.catalog.random(toFilters(args), env.signal);
+  const entry = checkedEntry("random", await env.catalog.random(toFilters(args), env.signal));
   return { entry: entrySummary(entry) };
 }
 
@@ -121,7 +135,7 @@ export interface ResolveArgs {
 }
 
 export async function resolveDownload(env: Env, args: ResolveArgs) {
-  const entry = await env.catalog.entry(args.slug, env.signal);
+  const entry = checkedEntry("entry", await env.catalog.entry(args.slug, env.signal));
   const preference = {
     languages: args.prefer?.languages ?? [],
     formats: args.prefer?.formats ?? [],

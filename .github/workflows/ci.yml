@@ -36,6 +36,26 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  # The engines floor is Node 22; the matrix above runs the .node-version release.
+  node-floor:
+    name: check (node 22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
   audit:
     name: audit
     runs-on: ubuntu-latest
@@ -67,6 +87,31 @@ jobs:
         run: node scripts/check-fixtures.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
+  plugin:
+    name: plugin
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Versions agree
+        run: node scripts/check-versions.mjs
+      # Pinned: 2.1.330 is the first release that knows plugin.json "network"; 2.1.323 reports it as an
+      # unknown field and --strict fails on that. The native binary comes from the pinned optional
+      # dependency @anthropic-ai/claude-code-linux-x64; the package's postinstall (install.cjs) only
+      # links it. --strict-allow-scripts makes the install fail if any other package has an install
+      # script, so only this package at this version may run one.
+      - name: Install Claude Code
+        run: npm install -g --strict-allow-scripts --allow-scripts=@anthropic-ai/claude-code@2.1.330 @anthropic-ai/claude-code@2.1.330
+      - name: Validate the plugin and the marketplace
+        run: claude plugin validate . --strict
+        env:
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
 
   gitleaks:
     name: gitleaks
