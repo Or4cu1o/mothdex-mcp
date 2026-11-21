@@ -1,0 +1,12 @@
+{
+  "name": "mothdex-mcp",
+  "description": "Mothdex plugin for Claude Code",
+  "owner": { "name": "Or4cu1o" },
+  "plugins": [
+    {
+      "name": "mothdex",
+      "source": "./",
+      "description": "Search the Mothdex game catalog and resolve download links"
+    }
+  ]
+}

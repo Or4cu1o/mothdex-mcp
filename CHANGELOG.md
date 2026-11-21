@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Claude Code plugin and marketplace (the repository is both): `.claude-plugin/plugin.json` and `marketplace.json`,
+  `.mcp.json` pointing at the bundled `dist/mothdex-mcp.mjs`, and skills `mothdex` (model-invoked),
+  `/mothdex:search`, `/mothdex:random` and `/mothdex:download` (resolves links, never downloads). A `plugin` CI job
+  checks that plugin and package versions agree and runs `claude plugin validate . --strict` with Claude Code 2.1.330.
 - Stdio MCP server on `@modelcontextprotocol/server` 2.4.0 (zod 4): read tools `search_entries`, `get_entry`,
   `random_entry`, `list_platforms`, `list_regions`, `db_info` and `resolve_download`; resources
   `mothdex://platforms`, `mothdex://regions` and `mothdex://entry/{slug}`; prompts `find_best_version` and

@@ -32,6 +32,17 @@ Configuration is environment only: `MOTHDEX_API_BASE_URL` (default `https://api.
 - [ ] Claude Desktop `.mcpb` package and MCP registry entry
 - [ ] Single-file bundle without runtime dependencies
 
+## Install in Claude Code
+
+```text
+/plugin marketplace add Or4cu1o/mothdex-mcp
+/plugin install mothdex --marketplace Or4cu1o/mothdex-mcp
+```
+
+The plugin runs the bundled `dist/mothdex-mcp.mjs` with Node and adds the skills `/mothdex:search`,
+`/mothdex:random` and `/mothdex:download`. Which build ships in the repository is decided with the release
+workflow (T-34); until then run `pnpm build` first.
+
 ## Develop
 
 Requires Node (see `.node-version`) and [pnpm](https://pnpm.io) (version pinned in `package.json`).
