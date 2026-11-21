@@ -13,6 +13,8 @@ export interface ServerDeps {
   readonly version: string;
   readonly client?: MothdexClient;
   readonly clock?: Clock;
+  /** Operator warnings; stderr by default (stdout belongs to the protocol). */
+  readonly warn?: (message: string) => void;
 }
 
 /** The catalog tools, resources and prompts never change while the server runs (tools.md §4). */
@@ -20,6 +22,10 @@ const STATIC_CAPABILITIES = {
   tools: { listChanged: false },
   resources: { listChanged: false, subscribe: false },
   prompts: { listChanged: false },
+};
+
+const STDERR_WARN = (message: string): void => {
+  process.stderr.write(`mothdex-mcp: ${message}\n`);
 };
 
 const SYSTEM_CLOCK: Clock = { now: () => Date.now() };
@@ -41,6 +47,7 @@ export function createServerFactory(deps: ServerDeps): () => McpServer {
     catalog,
     allowedHosts: config.allowedHosts,
     signal,
+    warn: deps.warn ?? STDERR_WARN,
   });
   return () => {
     const server = new McpServer(
