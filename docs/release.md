@@ -46,7 +46,7 @@ that path (the attestation is looked up by the file's digest, not its name).
 - A tag ruleset for `v*` that blocks **creation by anyone but the owner, update and deletion**: the check that the tag
   still points at the built commit leaves a short window before `gh release create`, which only the ruleset closes. Residual: a ruleset bypass for the repository admin role lets an admin
   still move a `v*` tag; that check is what catches it inside a run, and immutable releases lock the tag once the release is
-  published. Drop the bypass and lift it only when needed, if that residual matters.
+  published (a repository setting: owner-checked, Sentinela saw it enabled in the T-24 review). Drop the bypass and lift it only when needed, if that residual matters.
 - Required status checks on `main`, including `dist == build(src)`: `.gitattributes` hides the bundle from PR diffs, so
   that job is the only control on its content. Do not mark the release workflow as required (it only runs on tags).
 - Recommended: enable immutable releases, so assets cannot be replaced after publishing.
