@@ -20,6 +20,11 @@ Plugin packaging (`.claude-plugin/`, `.mcp.json`, `.mcpb`, `server.json`) is **p
 - Annotations on every read tool: `readOnlyHint: true`, `openWorldHint: true`; `idempotentHint: true` except `random_entry`.
 - **Compact outputs:** no links in search results; links appear only on request, paginated. Target: ≤ 4 KB per call by default.
 - API strings (titles, filenames, extras) are **untrusted data**. The skill and prompts tell the model to treat them as data.
+- **Slug rule.** Slugs follow the one rule in [`api-client.md`](https://github.com/Or4cu1o/mothdex-cli/blob/main/docs/contracts/cli/api-client.md) §2 (mothdex-cli),
+  `^[a-z0-9][a-z0-9-]{0,255}$` (`SAFE_SLUG`), because slugs reach command lines the model prints. A tool input outside it
+  is `invalid_request` and never reaches the API. `search_entries` drops results with an unsafe slug and logs a warning
+  on stderr. `get_entry`, `random_entry`, `resolve_download` and the `mothdex://entry/{slug}` resource fail with
+  `api_incompatible` when the answered slug is unsafe. The CLI applies the same policy.
 - Configuration (environment only): `MOTHDEX_API_BASE_URL`, `MOTHDEX_API_RATE_LIMIT` (clamped 1..10),
   `MOTHDEX_ALLOWED_HOSTS` (default `proxy.mothdex.net`).
 
@@ -50,7 +55,7 @@ A redirect the client refuses (another origin, a scheme change or more than 3 ho
 ### Shared input fragments
 
 ```ts
-const Slug = z.string().min(1).max(256);
+const Slug = z.string().regex(/^[a-z0-9][a-z0-9-]{0,255}$/); // the slug rule, api-client §2 (mothdex-cli)
 const Ids = z.array(z.string().regex(/^[a-z0-9_-]{1,32}$/)).max(20); // platforms or regions
 const Query = z.string().trim().min(1).max(200);
 const PageSize = z.number().int().min(1).max(25).default(10);
