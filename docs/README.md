@@ -7,6 +7,7 @@ before it lands, and code that deviates from one is a bug in either the code or 
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | [`contracts/mcp/`](contracts/mcp/) | [tools, resources and prompts](contracts/mcp/tools.md), [Claude Code plugin packaging](contracts/mcp/plugin.md) |
 | [`adr/`](adr/)                     | [ADR-0001 stack](adr/ADR-0001-stack.md) (copy; the canonical ADRs live in mothdex-cli)                          |
+| [`security/`](security/)           | [T-60 threat model: `download_file` and v0.2.0 distribution](security/T-60-threat-model-download-file.md)       |
 | [`research/`](research/)           | T1c Claude Code plugin spec, T1d MCP TypeScript SDK, MCPB and registry                                          |
 
 The API client rules, error codes and fixtures shared with this server are defined in
