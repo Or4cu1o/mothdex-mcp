@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- T-24b: `release.yml` `publish` checks the tag against the built commit as its last step before the release is created
+  (one API call per object), and refuses to upload files that `checksums.txt` does not list, same as mothdex-cli.
+
 ### Added
 
 - Contracts (T-61): the `download_file` empty-name fallback uses the call's staging random part as `jobID`, and the shared `sanitize-vectors.json` fixture (mothdex-cli e8f79f6) applies as written, except that `allow_executable` vectors give `unsafe_name`.
