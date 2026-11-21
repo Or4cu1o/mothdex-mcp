@@ -1,7 +1,8 @@
 import * as z from "zod/v4";
+import { SAFE_SLUG } from "./operations";
 
 /** Shared input fragments from docs/contracts/mcp/tools.md. */
-export const Slug = z.string().min(1).max(256);
+export const Slug = z.string().regex(SAFE_SLUG);
 export const Ids = z.array(z.string().regex(/^[a-z0-9_-]{1,32}$/)).max(20);
 export const Query = z.string().trim().min(1).max(200);
 export const PageSize = z.number().int().min(1).max(25).default(10);

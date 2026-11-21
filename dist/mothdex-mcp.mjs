@@ -23922,7 +23922,7 @@ function registerResources(server, makeEnv) {
 }
 
 // src/server/schemas.ts
-var Slug = string2().min(1).max(256);
+var Slug = string2().regex(SAFE_SLUG);
 var Ids = array(string2().regex(/^[a-z0-9_-]{1,32}$/)).max(20);
 var Query = string2().trim().min(1).max(200);
 var PageSize = number2().int().min(1).max(25).default(10);

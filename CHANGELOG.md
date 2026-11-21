@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Tool input `slug` now uses the shared rule `^[a-z0-9][a-z0-9-]{0,255}$` (the same `SAFE_SLUG` as for API slugs) instead of
+  length 1..256; other values are `invalid_request`.
 - Contracts: tools follow the shared slug rule (`^[a-z0-9][a-z0-9-]{0,255}$`, api-client §2 in mothdex-cli). An unsafe
   slug in input is `invalid_request`, search drops such results with a warning, and a single-entry answer is
   `api_incompatible`.
