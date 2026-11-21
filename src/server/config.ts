@@ -29,7 +29,7 @@ function parseRateLimit(raw: string | undefined): number | undefined {
 function parseHosts(raw: string | undefined): ReadonlySet<string> {
   const hosts = (raw ?? "")
     .split(",")
-    .map((host) => host.trim().toLowerCase())
+    .map((host) => host.trim().toLowerCase().replace(/\.$/, ""))
     .filter((host) => host !== "");
   return new Set(hosts.length > 0 ? hosts : DEFAULT_ALLOWED_HOSTS);
 }

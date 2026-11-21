@@ -13,19 +13,43 @@ export interface RankedLink {
   readonly reasons: readonly string[];
 }
 
+const HTTPS_PREFIX = /^https:\/\//i;
+
+const hasControlOrSpace = (text: string): boolean =>
+  [...text].some((char) => {
+    const code = char.charCodeAt(0);
+    return code <= 0x20 || code === 0x7f || /\s/.test(char);
+  });
+const SAFE_AUTHORITY = /^[\u0021-\u007e]+$/;
+const IPV4_LIKE = /^[0-9.]+$/;
+
+/**
+ * The raw URL text must already be what the CLI's CheckURL accepts, because `new URL` normalizes
+ * (percent-escapes, backslashes, fullwidth letters, a missing "//") into something that would pass.
+ * https only, no whitespace or control bytes, an ASCII authority without userinfo, escapes or
+ * backslashes, and a port that is empty or exactly 443.
+ */
+function rawUrlAllowed(url: string): boolean {
+  if (hasControlOrSpace(url) || !HTTPS_PREFIX.test(url)) return false;
+  const authority = url.slice("https://".length).split(/[/?#]/, 1)[0] ?? "";
+  if (!SAFE_AUTHORITY.test(authority) || /[@%\\[\]]/.test(authority)) return false;
+  const colon = authority.indexOf(":");
+  const port = colon < 0 ? "" : authority.slice(colon + 1);
+  return port === "" || port === "443";
+}
+
 /**
  * True for https URLs on the default port, without credentials, whose host (one trailing dot
- * ignored) is in the allowlist. Same strictness as the CLI downloader's URL policy.
+ * ignored) is in the allowlist. IP literals and punycode (`xn--`) labels are never trusted. Same
+ * strictness as the CLI downloader's URL policy.
  */
 export function isTrustedHost(url: string, allowedHosts: ReadonlySet<string>): boolean {
+  if (!rawUrlAllowed(url)) return false;
   try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase().replace(/\.$/, "");
+    const host = new URL(url).hostname.toLowerCase().replace(/\.$/, "");
     return (
-      parsed.protocol === "https:" &&
-      parsed.username === "" &&
-      parsed.password === "" &&
-      (parsed.port === "" || parsed.port === "443") &&
+      !IPV4_LIKE.test(host) &&
+      !host.split(".").some((label) => label.startsWith("xn--")) &&
       allowedHosts.has(host)
     );
   } catch {
