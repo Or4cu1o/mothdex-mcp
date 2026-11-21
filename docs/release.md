@@ -16,20 +16,24 @@ The release is a tag. Nothing here runs until the owner creates a `v*` tag; no w
 - `release.yml` (tag `vX.Y.Z[-pre]` only): build (read-only) requires the tag to be on `main`, the tag, `package.json`
   and `plugin.json` versions to agree, lint, typecheck, tests, build, a clean tree (committed dist == build) and the
   stdio smoke test of the dist and of the staged release file. `attest` (OIDC) attests the files. `publish`
-  (environment `release`) first checks that the tag still resolves to the commit that was built (annotated tags
-  followed), then re-verifies checksums and attestations (signer workflow, tag, `--source-digest` of that commit, no
-  self-hosted runner) before `gh release create --verify-tag`.
+  (environment `release`) re-verifies checksums and attestations (signer workflow, tag, `--source-digest` of that
+  commit, no self-hosted runner), checks that the files to upload are exactly the ones `checksums.txt` lists plus itself,
+  and as its last check before `gh release create --verify-tag` that the tag still resolves to the commit that was built
+  (annotated tags followed, one API call per object).
 - `ci.yml` also lints the workflows with a pinned actionlint image.
 - No job uses a dependency cache; third-party actions are pinned by commit SHA; the tag name only reaches the shell
   through an environment variable.
 
 ## Verifying a download
 
+The provenance example needs a clone with the tag fetched (`git fetch --tags`); otherwise use the commit SHA of the tag
+instead of `git rev-list`.
+
 ```sh
 sha256sum --check --ignore-missing checksums.txt
 gh attestation verify mothdex-mcp_X.Y.Z.mjs --repo Or4cu1o/mothdex-mcp \
   --signer-workflow Or4cu1o/mothdex-mcp/.github/workflows/release.yml --source-ref refs/tags/vX.Y.Z \
-  --source-digest <commit of the tag: git rev-list -n1 vX.Y.Z> --deny-self-hosted-runners
+  --source-digest "$(git rev-list -n1 vX.Y.Z)" --deny-self-hosted-runners
 ```
 
 A plugin user can check the bundle the plugin actually runs the same way: the installed
@@ -40,7 +44,9 @@ that path (the attestation is looked up by the file's digest, not its name).
 
 - Environment `release` with required reviewers (the `publish` job waits for it).
 - A tag ruleset for `v*` that blocks **creation by anyone but the owner, update and deletion**: the check that the tag
-  still points at the built commit leaves a short window before `gh release create`, which only the ruleset closes.
+  still points at the built commit leaves a short window before `gh release create`, which only the ruleset closes. Residual: a ruleset bypass for the repository admin role lets an admin
+  still move a `v*` tag; that check is what catches it inside a run, and immutable releases lock the tag once the release is
+  published (a repository setting: owner-checked, Sentinela saw it enabled in the T-24 review). Drop the bypass and lift it only when needed, if that residual matters.
 - Required status checks on `main`, including `dist == build(src)`: `.gitattributes` hides the bundle from PR diffs, so
   that job is the only control on its content. Do not mark the release workflow as required (it only runs on tags).
 - Recommended: enable immutable releases, so assets cannot be replaced after publishing.

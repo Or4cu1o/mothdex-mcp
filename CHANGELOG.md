@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- T-24b: `release.yml` `publish` checks the tag against the built commit as its last step before the release is created
+  (one API call per object), and refuses to upload files that `checksums.txt` does not list, same as mothdex-cli.
+
 ### Added
 
 - Contracts (MCP-19-arch): tools.md §3 records the T-62 behaviour. An unset enable flag is silent, a preflight `lstat` returns `exists` before any connection, and the swapped-folder `.part` residual (case 16) is documented.
