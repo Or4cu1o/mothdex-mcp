@@ -23945,6 +23945,8 @@ var DestinationRejected = class extends Error {
 };
 var LAUNCHER_FOLDERS = /* @__PURE__ */ new Set(["ports", "ports_scripts", "windows"]);
 var HOME_DENY = [".ssh", ".gnupg", ".config", ".local/bin", ".claude", ".cursor", ".vscode"];
+var LINUX_DENY = ["/var"];
+var DARWIN_DENY = ["/private/var/db", "/private/var/at", "/private/var/root"];
 var POSIX_DENY = [
   "/etc",
   "/usr",
@@ -23953,7 +23955,6 @@ var POSIX_DENY = [
   "/boot",
   "/System",
   "/Library",
-  "/var",
   "/opt",
   "/dev",
   "/proc",
@@ -23966,6 +23967,8 @@ function deniedFolders(ctx, home) {
   const p = flavor(ctx.platform);
   const denied = HOME_DENY.map((part) => p.join(home, ...part.split("/")));
   if (ctx.platform !== "win32") denied.push(...POSIX_DENY);
+  if (ctx.platform === "linux") denied.push(...LINUX_DENY);
+  if (ctx.platform === "darwin") denied.push(...DARWIN_DENY);
   const { APPDATA, LOCALAPPDATA, PROGRAMDATA, CLAUDE_PLUGIN_ROOT, CLAUDE_PLUGIN_DATA } = ctx.env;
   const programFiles = [ctx.env.ProgramFiles, ctx.env["ProgramFiles(x86)"], ctx.env.SystemRoot];
   if (ctx.platform === "win32") {

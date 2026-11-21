@@ -19,6 +19,9 @@ export interface DestinationContext {
 
 const LAUNCHER_FOLDERS: ReadonlySet<string> = new Set(["ports", "ports_scripts", "windows"]);
 const HOME_DENY = [".ssh", ".gnupg", ".config", ".local/bin", ".claude", ".cursor", ".vscode"];
+/** /var is a system folder on Linux; on macOS it is /private/var, where every user temp folder lives. */
+const LINUX_DENY = ["/var"];
+const DARWIN_DENY = ["/private/var/db", "/private/var/at", "/private/var/root"];
 const POSIX_DENY = [
   "/etc",
   "/usr",
@@ -27,7 +30,6 @@ const POSIX_DENY = [
   "/boot",
   "/System",
   "/Library",
-  "/var",
   "/opt",
   "/dev",
   "/proc",
@@ -46,6 +48,8 @@ function deniedFolders(ctx: Pick<DestinationContext, "platform" | "env">, home: 
   const p = flavor(ctx.platform);
   const denied = HOME_DENY.map((part) => p.join(home, ...part.split("/")));
   if (ctx.platform !== "win32") denied.push(...POSIX_DENY);
+  if (ctx.platform === "linux") denied.push(...LINUX_DENY);
+  if (ctx.platform === "darwin") denied.push(...DARWIN_DENY);
   const { APPDATA, LOCALAPPDATA, PROGRAMDATA, CLAUDE_PLUGIN_ROOT, CLAUDE_PLUGIN_DATA } = ctx.env;
   const programFiles = [ctx.env.ProgramFiles, ctx.env["ProgramFiles(x86)"], ctx.env.SystemRoot];
   if (ctx.platform === "win32") {
