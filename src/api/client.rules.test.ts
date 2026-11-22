@@ -51,6 +51,7 @@ describe("error classification", () => {
 describe("server text and Retry-After", () => {
   it("strips Cc and Cf characters and bounds the length in bytes", () => {
     expect(cleanMessage("a\u001b[31mb‮c​d")).toBe("a[31mbcd");
+    expect(cleanMessage("a\u2028FORGED\u2029b")).toBe("aFORGEDb"); // line and paragraph separators too
     const long = cleanMessage("é".repeat(600));
     expect(Buffer.byteLength(long, "utf8")).toBe(512);
     expect(long).not.toContain("�");

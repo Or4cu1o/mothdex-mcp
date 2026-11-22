@@ -5,7 +5,7 @@ import {
   ResourceTemplate,
 } from "@modelcontextprotocol/server";
 import { isMothdexError } from "../api";
-import { toToolError } from "./errors";
+import { describeApiError, toToolError } from "./errors";
 import { type Env, getEntry, listPlatforms, listRegions } from "./operations";
 
 const JSON_MIME = "application/json";
@@ -16,10 +16,15 @@ function asJson(uri: URL, value: unknown): ReadResourceResult {
 }
 
 /** A missing entry is the protocol's "resource not found"; every other failure keeps its tool message. */
-async function read(uri: URL, load: () => Promise<unknown>): Promise<ReadResourceResult> {
+async function read(
+  uri: URL,
+  warn: Env["warn"],
+  load: () => Promise<unknown>,
+): Promise<ReadResourceResult> {
   try {
     return asJson(uri, await load());
   } catch (error) {
+    if (isMothdexError(error)) warn?.(describeApiError(error));
     if (isMothdexError(error) && error.kind === "not_found") {
       throw new ResourceNotFoundError(uri.href);
     }
@@ -43,13 +48,19 @@ export function registerResources(server: McpServer, makeEnv: (signal: AbortSign
     "platforms",
     "mothdex://platforms",
     { title: "Platforms", description: "All platforms and their ids", mimeType: JSON_MIME },
-    (uri, ctx) => read(uri, () => listPlatforms(makeEnv(ctx.mcpReq.signal), {})),
+    (uri, ctx) => {
+      const env = makeEnv(ctx.mcpReq.signal);
+      return read(uri, env.warn, () => listPlatforms(env, {}));
+    },
   );
   server.registerResource(
     "regions",
     "mothdex://regions",
     { title: "Regions", description: "All regions and their ids", mimeType: JSON_MIME },
-    (uri, ctx) => read(uri, () => listRegions(makeEnv(ctx.mcpReq.signal))),
+    (uri, ctx) => {
+      const env = makeEnv(ctx.mcpReq.signal);
+      return read(uri, env.warn, () => listRegions(env));
+    },
   );
   server.registerResource(
     "entry",
@@ -59,13 +70,11 @@ export function registerResources(server: McpServer, makeEnv: (signal: AbortSign
       description: "One entry with up to 25 of its links (same as get_entry)",
       mimeType: JSON_MIME,
     },
-    (uri, variables, ctx) =>
-      read(uri, () =>
-        getEntry(makeEnv(ctx.mcpReq.signal), {
-          slug: slugOf(variables.slug),
-          offset: 0,
-          limit: MAX_LINKS,
-        }),
-      ),
+    (uri, variables, ctx) => {
+      const env = makeEnv(ctx.mcpReq.signal);
+      return read(uri, env.warn, () =>
+        getEntry(env, { slug: slugOf(variables.slug), offset: 0, limit: MAX_LINKS }),
+      );
+    },
   );
 }

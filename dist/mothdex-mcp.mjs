@@ -23027,7 +23027,7 @@ var STATUS_TEXT = /* @__PURE__ */ new Map([
   [503, "Service Unavailable"],
   [504, "Gateway Timeout"]
 ]);
-var CONTROL_OR_FORMAT = /[\p{Cc}\p{Cf}]/gu;
+var CONTROL_OR_FORMAT = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
 var HTTP_DATE_PREFIX = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,? /;
 var DIGITS = /^[+-]?\d+$/;
 function cleanMessage(text, maxBytes = MAX_MESSAGE_BYTES) {
@@ -24763,10 +24763,11 @@ var MAX_LINKS = 25;
 function asJson(uri, value) {
   return { contents: [{ uri: uri.href, mimeType: JSON_MIME, text: JSON.stringify(value) }] };
 }
-async function read(uri, load) {
+async function read(uri, warn, load) {
   try {
     return asJson(uri, await load());
   } catch (error2) {
+    if (isMothdexError(error2)) warn?.(describeApiError(error2));
     if (isMothdexError(error2) && error2.kind === "not_found") {
       throw new ResourceNotFoundError(uri.href);
     }
@@ -24786,13 +24787,19 @@ function registerResources(server, makeEnv) {
     "platforms",
     "mothdex://platforms",
     { title: "Platforms", description: "All platforms and their ids", mimeType: JSON_MIME },
-    (uri, ctx) => read(uri, () => listPlatforms(makeEnv(ctx.mcpReq.signal), {}))
+    (uri, ctx) => {
+      const env = makeEnv(ctx.mcpReq.signal);
+      return read(uri, env.warn, () => listPlatforms(env, {}));
+    }
   );
   server.registerResource(
     "regions",
     "mothdex://regions",
     { title: "Regions", description: "All regions and their ids", mimeType: JSON_MIME },
-    (uri, ctx) => read(uri, () => listRegions(makeEnv(ctx.mcpReq.signal)))
+    (uri, ctx) => {
+      const env = makeEnv(ctx.mcpReq.signal);
+      return read(uri, env.warn, () => listRegions(env));
+    }
   );
   server.registerResource(
     "entry",
@@ -24802,14 +24809,14 @@ function registerResources(server, makeEnv) {
       description: "One entry with up to 25 of its links (same as get_entry)",
       mimeType: JSON_MIME
     },
-    (uri, variables, ctx) => read(
-      uri,
-      () => getEntry(makeEnv(ctx.mcpReq.signal), {
-        slug: slugOf(variables.slug),
-        offset: 0,
-        limit: MAX_LINKS
-      })
-    )
+    (uri, variables, ctx) => {
+      const env = makeEnv(ctx.mcpReq.signal);
+      return read(
+        uri,
+        env.warn,
+        () => getEntry(env, { slug: slugOf(variables.slug), offset: 0, limit: MAX_LINKS })
+      );
+    }
   );
 }
 

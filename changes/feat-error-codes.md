@@ -7,4 +7,4 @@
   to the generic `api` kind. On a non-200 the HTTP status still decides, except a 400 with `INVALID_API_VERSION` (`api_incompatible`). The old text form of `info.error`
   still works, and `info.code` is ignored. `MothdexError` gains `code`.
 - T-77-mcp: the MCP tool error message is now fixed English per code. The upstream message no longer reaches `structuredContent` or `text`; it goes to the stderr
-  log only, with control and format characters removed and cut to 200 bytes (the client error keeps up to 512 bytes and never uses it for logic).
+  log only, with control, format and line-separator characters removed and cut to 200 bytes (the client error keeps up to 512 bytes and never uses it for logic).

@@ -22,7 +22,8 @@ const STATUS_TEXT: ReadonlyMap<number, string> = new Map([
   [504, "Gateway Timeout"],
 ]);
 
-const CONTROL_OR_FORMAT = /[\p{Cc}\p{Cf}]/gu;
+/** Cc, Cf and the line and paragraph separators (Zl, Zp), which some log viewers treat as a line break. */
+const CONTROL_OR_FORMAT = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
 /** HTTP dates start with a weekday name (IMF-fixdate, RFC 850, asctime); Date.parse accepts far more. */
 const HTTP_DATE_PREFIX = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,? /;
 const DIGITS = /^[+-]?\d+$/;

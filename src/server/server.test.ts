@@ -269,6 +269,20 @@ describe("resources and prompts", () => {
     await expect(h.mcp.readResource({ uri: "mothdex://entry/nope" })).rejects.toThrow();
   });
 
+  it("a resource failure gives the fixed message; the upstream text only reaches the log", async () => {
+    const warnings: string[] = [];
+    const body = JSON.stringify({ info: { error: "DB_ERROR", message: "SECRET-TEXT" }, data: {} });
+    harness = await startHarness([{ body }], (message) => warnings.push(message));
+    const error = await harness.mcp
+      .readResource({ uri: "mothdex://platforms" })
+      .catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).not.toContain("SECRET-TEXT");
+    expect(warnings.some((w) => w.includes("code DB_ERROR") && w.includes("SECRET-TEXT"))).toBe(
+      true,
+    );
+  });
+
   it("prompts quote user text and name the tools to call", async () => {
     const h = await start({});
     const result = await h.mcp.getPrompt({
