@@ -7,17 +7,34 @@ import { backoffCeiling, INITIAL_RETRY_STATE, planRetry } from "./retry";
 
 describe("error classification", () => {
   it.each([
-    [{ error: "Entry not found", code: "" }, "not_found"],
-    [{ error: "Slug is required", code: "" }, "invalid_request"],
-    [{ error: "Invalid input provided", code: "" }, "invalid_request"],
-    [{ error: "Database operation failed", code: "" }, "upstream"],
-    [{ error: "A database error occurred", code: "" }, "upstream"],
-    [{ error: "An unexpected error occurred", code: "" }, "upstream"],
-    [{ error: "something new", code: "" }, "api"],
-    [{ error: "Entry not found", code: "database_error" }, "upstream"],
-    [{ error: "x", code: "unheard_of" }, "api"],
-  ] as const)("info %j gives %s", (info, kind) => {
-    expect(classifyInfoError(info)).toBe(kind);
+    ["Entry not found", "not_found"],
+    ["Slug is required", "invalid_request"],
+    ["Invalid input provided", "invalid_request"],
+    ["Database operation failed", "upstream"],
+    ["A database error occurred", "upstream"],
+    ["An unexpected error occurred", "upstream"],
+    ["something new", "api"],
+  ] as const)("old form %j gives %s", (error, kind) => {
+    expect(classifyInfoError({ error, message: "" })).toBe(kind);
+  });
+
+  it.each([
+    ["ENTRY_NOT_FOUND", "not_found"],
+    ["INVALID_API_VERSION", "api_incompatible"],
+    ["MALFORMED_JSON", "invalid_request"],
+    ["INVALID_JSON_OBJECT", "invalid_request"],
+    ["MISSING_REQUIRED_FIELDS", "invalid_request"],
+    ["INVALID_FIELD_TYPE", "invalid_request"],
+    ["INVALID_INPUT", "invalid_request"],
+    ["DB_OPERATION_ERROR", "upstream"],
+    ["DB_ERROR", "upstream"],
+    ["UNEXPECTED_ERROR", "upstream"],
+    ["RATE_LIMIT_ERROR", "rate_limited"],
+    ["HTTP_ERROR", "api"], // its kind comes from the HTTP status, so on a 200 it is unknown
+    ["SOMETHING_NEW", "api"],
+    ["entry_not_found", "api"], // a code is matched case-sensitively; this is not code-shaped, so the old table finds nothing
+  ] as const)("code %s gives %s", (error, kind) => {
+    expect(classifyInfoError({ error, message: "Entry not found" })).toBe(kind);
   });
 
   it.each([
@@ -34,9 +51,10 @@ describe("error classification", () => {
 describe("server text and Retry-After", () => {
   it("strips Cc and Cf characters and bounds the length in bytes", () => {
     expect(cleanMessage("a\u001b[31mb‮c​d")).toBe("a[31mbcd");
-    const long = cleanMessage("é".repeat(300));
-    expect(Buffer.byteLength(long, "utf8")).toBeLessThanOrEqual(200);
+    const long = cleanMessage("é".repeat(600));
+    expect(Buffer.byteLength(long, "utf8")).toBe(512);
     expect(long).not.toContain("�");
+    expect(Buffer.byteLength(cleanMessage("é".repeat(300), 200), "utf8")).toBe(200);
   });
 
   it.each([

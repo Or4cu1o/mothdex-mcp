@@ -1,8 +1,16 @@
-import { type ApiInfo, classifyInfoError, classifyStatus, MothdexError } from "./errors";
+import {
+  type ApiInfo,
+  classifyInfoError,
+  classifyStatus,
+  type ErrorKind,
+  isErrorCode,
+  MothdexError,
+} from "./errors";
 
 export const MAX_BODY_BYTES = 16 * 1024 * 1024;
 const MAX_RETRY_AFTER_MS = 24 * 60 * 60 * 1000;
-const MAX_MESSAGE_BYTES = 200;
+/** Cap of the upstream message the client error carries; the stderr log cuts it again to 200 bytes. */
+const MAX_MESSAGE_BYTES = 512;
 
 const STATUS_TEXT: ReadonlyMap<number, string> = new Map([
   [400, "Bad Request"],
@@ -20,17 +28,17 @@ const HTTP_DATE_PREFIX = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,? /;
 const DIGITS = /^[+-]?\d+$/;
 
 /**
- * Defense in depth for server text that reaches a model or a terminal: drops Unicode
- * control (Cc) and format (Cf) characters, then bounds the length in UTF-8 bytes.
- * Only info.error goes through it; data fields stay raw.
+ * Defense in depth for server text that reaches a terminal or a log: drops Unicode
+ * control (Cc) and format (Cf) characters, then bounds the length in UTF-8 bytes (on a character boundary).
+ * Only the upstream error message goes through it; data fields stay raw.
  */
-export function cleanMessage(text: string): string {
+export function cleanMessage(text: string, maxBytes: number = MAX_MESSAGE_BYTES): string {
   const clean = text.replace(CONTROL_OR_FORMAT, "");
   let out = "";
   let bytes = 0;
   for (const char of clean) {
     bytes += Buffer.byteLength(char, "utf8");
-    if (bytes > MAX_MESSAGE_BYTES) break;
+    if (bytes > maxBytes) break;
     out += char;
   }
   return out;
@@ -62,19 +70,26 @@ function tryParseJson(text: string): unknown {
   }
 }
 
+/** An absent or null `info` is "no error". `info.error` must be a string and `info.message` is text or ignored; `info.code` is ignored. */
 function readInfo(raw: unknown): ApiInfo | undefined {
-  if (raw === undefined || raw === null) return { error: "", code: "" };
+  if (raw === undefined || raw === null) return { error: "", message: "" };
   if (!isRecord(raw)) return undefined;
-  const { error = "", code = "" } = raw;
-  if (typeof error !== "string" || typeof code !== "string") return undefined;
-  return { error, code };
+  const { error = "", message } = raw;
+  if (typeof error !== "string") return undefined;
+  return { error, message: typeof message === "string" ? message : "" };
 }
 
-function bestEffortMessage(text: string): string {
+/** The code when `info.error` has the shape of one, else "". */
+const codeOf = (info: ApiInfo | undefined): string =>
+  info !== undefined && isErrorCode(info.error) ? info.error : "";
+
+/** The human text: `info.message` next to a code, `info.error` itself in the old form. Cleaned and capped. */
+const messageOf = (info: ApiInfo): string =>
+  cleanMessage(isErrorCode(info.error) ? info.message : info.error);
+
+function bestEffortInfo(text: string): ApiInfo | undefined {
   const parsed = tryParseJson(text);
-  if (!isRecord(parsed)) return "";
-  const info = readInfo(parsed.info);
-  return info === undefined ? "" : cleanMessage(info.error);
+  return isRecord(parsed) ? readInfo(parsed.info) : undefined;
 }
 
 function statusError(
@@ -84,11 +99,15 @@ function statusError(
   text: string,
   nowMs: number,
 ): MothdexError {
-  const kind = classifyStatus(status);
+  const info = bestEffortInfo(text);
+  const code = codeOf(info);
+  // The status decides the kind (A6); a code on a non-200 is only recorded, except a wrong API version.
+  const kind: ErrorKind =
+    status === 400 && code === "INVALID_API_VERSION" ? "api_incompatible" : classifyStatus(status);
   let detail = STATUS_TEXT.get(status) ?? `HTTP ${status}`;
-  if (status === 400) detail = bestEffortMessage(text) || detail;
+  if (status === 400 && info !== undefined) detail = messageOf(info) || detail;
   const retryAfterMs = status === 429 ? parseRetryAfter(headers.get("retry-after"), nowMs) : 0;
-  return new MothdexError({ kind, op, httpStatus: status, detail, retryAfterMs });
+  return new MothdexError({ kind, op, httpStatus: status, detail, code, retryAfterMs });
 }
 
 /**
@@ -113,12 +132,18 @@ export function parseResponse(
       detail: "invalid JSON response",
     });
   }
-  if (info.error !== "" || info.code !== "") {
+  if (info.error !== "") {
+    const kind = classifyInfoError(info);
+    // RATE_LIMIT_ERROR is a 429 in disguise: same cooldown rules, Retry-After when the server sent one.
+    const retryAfterMs =
+      kind === "rate_limited" ? parseRetryAfter(headers.get("retry-after"), nowMs) : 0;
     throw new MothdexError({
-      kind: classifyInfoError(info),
+      kind,
       op,
       httpStatus: status,
-      detail: cleanMessage(info.error),
+      detail: messageOf(info),
+      code: codeOf(info),
+      retryAfterMs,
     });
   }
   return parsed.data;

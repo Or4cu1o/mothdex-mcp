@@ -22737,12 +22737,15 @@ var MothdexError = class _MothdexError extends Error {
   op;
   httpStatus;
   detail;
+  code;
   retryAfterMs;
   constructor(init) {
     const httpStatus = init.httpStatus ?? 0;
     const detail = init.detail ?? "";
+    const code = init.code ?? "";
     let message = `mothdex ${init.op}: ${init.kind}`;
     if (httpStatus !== 0) message += ` (HTTP ${httpStatus})`;
+    if (code !== "") message += `: ${code}`;
     if (detail !== "") message += `: ${detail}`;
     super(message, init.cause === void 0 ? void 0 : { cause: init.cause });
     this.name = "MothdexError";
@@ -22750,6 +22753,7 @@ var MothdexError = class _MothdexError extends Error {
     this.op = init.op;
     this.httpStatus = httpStatus;
     this.detail = detail;
+    this.code = code;
     this.retryAfterMs = init.retryAfterMs ?? 0;
   }
   /** A copy that carries a different cooldown. */
@@ -22759,6 +22763,7 @@ var MothdexError = class _MothdexError extends Error {
       op: this.op,
       httpStatus: this.httpStatus,
       detail: this.detail,
+      code: this.code,
       retryAfterMs,
       cause: this.cause
     });
@@ -22775,15 +22780,24 @@ var MESSAGE_KINDS = /* @__PURE__ */ new Map([
   ["A database error occurred", "upstream"],
   ["An unexpected error occurred", "upstream"]
 ]);
+var CODE_SHAPE = /^[A-Z][A-Z0-9_]{0,63}$/;
 var CODE_KINDS = /* @__PURE__ */ new Map([
-  ["entry_not_found", "not_found"],
-  ["invalid_request", "invalid_request"],
-  ["database_error", "upstream"],
-  ["internal_error", "upstream"]
+  ["ENTRY_NOT_FOUND", "not_found"],
+  ["INVALID_API_VERSION", "api_incompatible"],
+  ["MALFORMED_JSON", "invalid_request"],
+  ["INVALID_JSON_OBJECT", "invalid_request"],
+  ["MISSING_REQUIRED_FIELDS", "invalid_request"],
+  ["INVALID_FIELD_TYPE", "invalid_request"],
+  ["INVALID_INPUT", "invalid_request"],
+  ["DB_OPERATION_ERROR", "upstream"],
+  ["DB_ERROR", "upstream"],
+  ["UNEXPECTED_ERROR", "upstream"],
+  ["RATE_LIMIT_ERROR", "rate_limited"]
 ]);
+var isErrorCode = (text) => CODE_SHAPE.test(text);
 function classifyInfoError(info) {
-  if (info.code !== "") return CODE_KINDS.get(info.code) ?? "api";
-  return MESSAGE_KINDS.get(info.error) ?? "api";
+  const table = isErrorCode(info.error) ? CODE_KINDS : MESSAGE_KINDS;
+  return table.get(info.error) ?? "api";
 }
 function classifyStatus(status) {
   if (status === 400) return "invalid_request";
@@ -23003,7 +23017,7 @@ function resolveOptions(options, parseBaseUrl2) {
 // src/api/parse.ts
 var MAX_BODY_BYTES = 16 * 1024 * 1024;
 var MAX_RETRY_AFTER_MS = 24 * 60 * 60 * 1e3;
-var MAX_MESSAGE_BYTES = 200;
+var MAX_MESSAGE_BYTES = 512;
 var STATUS_TEXT = /* @__PURE__ */ new Map([
   [400, "Bad Request"],
   [404, "Not Found"],
@@ -23016,13 +23030,13 @@ var STATUS_TEXT = /* @__PURE__ */ new Map([
 var CONTROL_OR_FORMAT = /[\p{Cc}\p{Cf}]/gu;
 var HTTP_DATE_PREFIX = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,? /;
 var DIGITS = /^[+-]?\d+$/;
-function cleanMessage(text) {
+function cleanMessage(text, maxBytes = MAX_MESSAGE_BYTES) {
   const clean = text.replace(CONTROL_OR_FORMAT, "");
   let out = "";
   let bytes = 0;
   for (const char of clean) {
     bytes += Buffer.byteLength(char, "utf8");
-    if (bytes > MAX_MESSAGE_BYTES) break;
+    if (bytes > maxBytes) break;
     out += char;
   }
   return out;
@@ -23050,24 +23064,26 @@ function tryParseJson(text) {
   }
 }
 function readInfo(raw) {
-  if (raw === void 0 || raw === null) return { error: "", code: "" };
+  if (raw === void 0 || raw === null) return { error: "", message: "" };
   if (!isRecord(raw)) return void 0;
-  const { error: error2 = "", code = "" } = raw;
-  if (typeof error2 !== "string" || typeof code !== "string") return void 0;
-  return { error: error2, code };
+  const { error: error2 = "", message } = raw;
+  if (typeof error2 !== "string") return void 0;
+  return { error: error2, message: typeof message === "string" ? message : "" };
 }
-function bestEffortMessage(text) {
+var codeOf = (info) => info !== void 0 && isErrorCode(info.error) ? info.error : "";
+var messageOf = (info) => cleanMessage(isErrorCode(info.error) ? info.message : info.error);
+function bestEffortInfo(text) {
   const parsed = tryParseJson(text);
-  if (!isRecord(parsed)) return "";
-  const info = readInfo(parsed.info);
-  return info === void 0 ? "" : cleanMessage(info.error);
+  return isRecord(parsed) ? readInfo(parsed.info) : void 0;
 }
 function statusError(op, status, headers, text, nowMs) {
-  const kind = classifyStatus(status);
+  const info = bestEffortInfo(text);
+  const code = codeOf(info);
+  const kind = status === 400 && code === "INVALID_API_VERSION" ? "api_incompatible" : classifyStatus(status);
   let detail = STATUS_TEXT.get(status) ?? `HTTP ${status}`;
-  if (status === 400) detail = bestEffortMessage(text) || detail;
+  if (status === 400 && info !== void 0) detail = messageOf(info) || detail;
   const retryAfterMs = status === 429 ? parseRetryAfter(headers.get("retry-after"), nowMs) : 0;
-  return new MothdexError({ kind, op, httpStatus: status, detail, retryAfterMs });
+  return new MothdexError({ kind, op, httpStatus: status, detail, code, retryAfterMs });
 }
 function parseResponse(op, status, headers, text, nowMs) {
   if (status !== 200) throw statusError(op, status, headers, text, nowMs);
@@ -23081,12 +23097,16 @@ function parseResponse(op, status, headers, text, nowMs) {
       detail: "invalid JSON response"
     });
   }
-  if (info.error !== "" || info.code !== "") {
+  if (info.error !== "") {
+    const kind = classifyInfoError(info);
+    const retryAfterMs = kind === "rate_limited" ? parseRetryAfter(headers.get("retry-after"), nowMs) : 0;
     throw new MothdexError({
-      kind: classifyInfoError(info),
+      kind,
       op,
       httpStatus: status,
-      detail: cleanMessage(info.error)
+      detail: messageOf(info),
+      code: codeOf(info),
+      retryAfterMs
     });
   }
   return parsed.data;
@@ -23608,6 +23628,23 @@ var CODES = {
   untrusted_redirect: "untrusted_redirect"
 };
 var RETRYABLE = /* @__PURE__ */ new Set(["network", "upstream", "rate_limited"]);
+var API_MESSAGES = {
+  network: "the request to the Mothdex API failed on the network",
+  not_found: "entry not found",
+  invalid_request: "the Mothdex API did not accept the request",
+  upstream: "the Mothdex API answered with an error",
+  api: "the Mothdex API answered with an error",
+  decode: "the Mothdex API answered in a form this server does not understand",
+  api_incompatible: "the Mothdex API answered in a form this server does not understand",
+  rate_limited: "the Mothdex API rate limit was reached",
+  canceled: "the request was canceled",
+  untrusted_redirect: "the Mothdex API redirected the request to another place"
+};
+function describeApiError(error2) {
+  const code = error2.code === "" ? "" : ` code ${error2.code}`;
+  const text = error2.detail === "" ? "" : `: ${cleanMessage(error2.detail, 200)}`;
+  return `${error2.op} failed: ${error2.kind}${error2.httpStatus === 0 ? "" : ` (HTTP ${error2.httpStatus})`}${code}${text}`;
+}
 function toToolError(error2) {
   if (error2 instanceof InvalidRequest) {
     return { code: "invalid_request", message: error2.message, retryable: false };
@@ -23624,7 +23661,7 @@ function toToolError(error2) {
     const retryAfterS = code === "rate_limited" && error2.retryAfterMs > 0 ? Math.ceil(error2.retryAfterMs / 1e3) : void 0;
     return {
       code,
-      message: error2.message,
+      message: API_MESSAGES[error2.kind],
       retryable: RETRYABLE.has(error2.kind),
       ...retryAfterS === void 0 ? {} : { retryAfterS }
     };
@@ -23905,7 +23942,8 @@ var success = (structuredContent) => ({
   content: [{ type: "text", text: JSON.stringify(structuredContent) }],
   structuredContent
 });
-function failure2(error2) {
+function failure2(error2, warn) {
+  if (isMothdexError(error2)) warn?.(describeApiError(error2));
   const { code, message, retryable, retryAfterS } = toToolError(error2);
   const body = {
     error: {
@@ -23936,10 +23974,11 @@ function registerReadTool(server, makeEnv, spec) {
       if (!parsed.success) {
         return failure2(new InvalidRequest(`invalid arguments: ${describeIssues(parsed.error)}`));
       }
+      const env = makeEnv(ctx.mcpReq.signal);
       try {
-        return success(await spec.run(makeEnv(ctx.mcpReq.signal), parsed.data));
+        return success(await spec.run(env, parsed.data));
       } catch (error2) {
-        return failure2(error2);
+        return failure2(error2, env.warn);
       }
     }
   );
@@ -24086,7 +24125,7 @@ var realFs = {
     return stats.bavail * stats.bsize;
   }
 };
-var codeOf = (error2) => typeof error2 === "object" && error2 !== null && "code" in error2 ? String(error2.code) : void 0;
+var codeOf2 = (error2) => typeof error2 === "object" && error2 !== null && "code" in error2 ? String(error2.code) : void 0;
 var STAGING_FLAGS = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0);
 var CHUNK_BYTES = 1024 * 1024;
 async function copyExclusive(source, target, onChunk = () => {
@@ -24139,7 +24178,7 @@ async function placeWithoutReplacing(fs2, part, final, active) {
     await fs2.link(part, final);
     return "done";
   } catch (error2) {
-    const code = codeOf(error2);
+    const code = codeOf2(error2);
     if (code === "EEXIST") return "exists";
     if (!NO_LINK_CODES.has(code)) throw error2;
   }
@@ -24147,7 +24186,7 @@ async function placeWithoutReplacing(fs2, part, final, active) {
     await fs2.copyFileExcl(part, final, active);
     return "done";
   } catch (error2) {
-    if (codeOf(error2) === "EEXIST") return "exists";
+    if (codeOf2(error2) === "EEXIST") return "exists";
     throw error2;
   }
 }
@@ -24396,7 +24435,7 @@ function randomId(bytes) {
 }
 var partName = (id) => `.mothdex-${id}.part`;
 function classify(error2) {
-  const code = codeOf(error2);
+  const code = codeOf2(error2);
   return code === "ENOSPC" || code === "EDQUOT" ? new DownloadFailure("disk_full", code) : error2;
 }
 async function currentDestination(rt) {
@@ -24428,7 +24467,7 @@ async function openStaging(rt, dest, firstId) {
     try {
       return { part, handle: await rt.fs.open(part, STAGING_FLAGS, 384) };
     } catch (error2) {
-      const code = codeOf(error2);
+      const code = codeOf2(error2);
       if (code === "EEXIST") continue;
       if (code === "ENOSPC" || code === "EDQUOT") throw classify(error2);
       throw new DownloadFailure("path_rejected", code);
@@ -24441,8 +24480,8 @@ async function existsAlready(rt, target) {
     await rt.fs.lstat(target);
     return true;
   } catch (error2) {
-    if (codeOf(error2) === "ENOENT") return false;
-    throw new DownloadFailure("path_rejected", codeOf(error2));
+    if (codeOf2(error2) === "ENOENT") return false;
+    throw new DownloadFailure("path_rejected", codeOf2(error2));
   }
 }
 var existsResult = (target) => ({
@@ -24459,7 +24498,7 @@ async function ensureSpace(rt, dest, size, held = 0n) {
   const floor = 256n * MIB;
   const margin = maxBig(fivePercent, floor);
   const free = await rt.fs.freeBytes(dest).catch((error2) => {
-    throw new DownloadFailure("disk_full", codeOf(error2));
+    throw new DownloadFailure("disk_full", codeOf2(error2));
   });
   if (free - (rt.state.ledger - held) < bytes + margin)
     throw new DownloadFailure("disk_full", "not enough free space");
@@ -24535,7 +24574,7 @@ async function runDownload(rt, env, args, onProgress) {
     const placed = await placeWithoutReplacing(rt.fs, part, final, state.activeParts).catch(
       (error2) => {
         const mapped = classify(error2);
-        throw mapped instanceof DownloadFailure ? mapped : new DownloadFailure("path_rejected", codeOf(error2));
+        throw mapped instanceof DownloadFailure ? mapped : new DownloadFailure("path_rejected", codeOf2(error2));
       }
     );
     if (placed === "exists") return existsResult(final);
@@ -24551,7 +24590,7 @@ async function runDownload(rt, env, args, onProgress) {
   } catch (error2) {
     const failure3 = classify(error2);
     rt.log(
-      `download ${jobId} failed: ${failure3 instanceof DownloadFailure ? `${failure3.code}${failure3.detail ? ` (${stripControl(failure3.detail)})` : ""}` : codeOf(failure3) ?? "error"}`
+      `download ${jobId} failed: ${failure3 instanceof DownloadFailure ? `${failure3.code}${failure3.detail ? ` (${stripControl(failure3.detail)})` : ""}` : codeOf2(failure3) ?? "error"}`
     );
     throw failure3;
   } finally {
@@ -24636,16 +24675,12 @@ function registerDownloadTool(server, makeEnv, runtime, clock) {
           params: { progressToken, progress: value, total }
         })
       );
+      const env = makeEnv(ctx.mcpReq.signal);
       try {
-        const result = await runDownload(
-          runtime,
-          makeEnv(ctx.mcpReq.signal),
-          parsed.data,
-          progress.report
-        );
+        const result = await runDownload(runtime, env, parsed.data, progress.report);
         return success(result);
       } catch (error2) {
-        return failure2(error2);
+        return failure2(error2, env.warn);
       } finally {
         progress.stop();
       }
