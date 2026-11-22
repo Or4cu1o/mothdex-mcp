@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { iconProblems } from "./check-icon.mjs";
 
 const read = (path) => JSON.parse(readFileSync(new URL(`../${path}`, import.meta.url), "utf8"));
 const pkg = read("package.json");
@@ -76,6 +77,9 @@ for (const entry of server.packages ?? []) {
 const mcpb = read("mcpb/manifest.json");
 if (mcpb.user_config?.download_dir?.default !== undefined)
   problems.push("mcpb download_dir must have no default");
+if (mcpb.icon !== "icon.png")
+  problems.push('mcpb/manifest.json must reference the icon as "icon.png"');
+problems.push(...iconProblems(fileURLToPath(new URL("../mcpb/icon.png", import.meta.url))));
 
 const WANT = ["LICENSE", "README.md", "dist/mothdex-mcp.mjs", "package.json"];
 const packed = JSON.parse(

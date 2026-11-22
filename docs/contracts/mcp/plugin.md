@@ -184,12 +184,14 @@ All new steps run in the existing `publish` job, or in a later job that needs it
 - the tag only via `env`;
 - the existing tag-peel check (`GITHUB_SHA`) before anything is published.
 
+A pre-release tag (`vX.Y.Z-rc.N`) is a GitHub pre-release only: the `npm` and `registry` jobs are skipped for it (`release.yml`), so nothing below the GitHub release runs.
+
 The order is fixed, and each step verifies the previous one's hash:
 
 1. **`build`:**
    - the bundle, as today;
    - the `.mcpb` packed from the committed dist with a pinned `@anthropic-ai/mcpb`: exact version, installed with `--ignore-scripts`, never `npx` latest;
-   - `unzip -l` must list exactly `manifest.json` and `dist/mothdex-mcp.mjs`, both byte for byte the committed files (`scripts/pack-mcpb.sh`). The icon joins this list when it exists (backlog `mcpb-icon`); `mcpb validate` accepts a manifest without one;
+   - `unzip -l` must list exactly `manifest.json`, `icon.png` and `dist/mothdex-mcp.mjs`, all three byte for byte the committed files (`mcpb/manifest.json`, `mcpb/icon.png`, `dist/mothdex-mcp.mjs`; `scripts/pack-mcpb.sh`). The icon is the 512x512 project-owned PNG approved in D30, referenced by the manifest as `icon.png`;
    - `mcpb validate` passes;
    - the `.mcpb` goes into `checksums.txt`;
    - the npm tarball `mothdex-mcp-<version>.tgz` is made here once (`npm pack --ignore-scripts` on the clean tree) and the committed

@@ -302,7 +302,7 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
         tree = os.path.join(work, "tree")
         if os.path.exists(tree):
             shutil.rmtree(tree)
-        for rel in ("package.json", "server.json", "README.md", "LICENSE", os.path.join("mcpb", "manifest.json"), os.path.join("dist", "mothdex-mcp.mjs"),
+        for rel in ("package.json", "server.json", "README.md", "LICENSE", os.path.join("mcpb", "manifest.json"), os.path.join("mcpb", "icon.png"), os.path.join("dist", "mothdex-mcp.mjs"), os.path.join("scripts", "check-icon.mjs"), os.path.join("scripts", "check-icon.mjs"),
                     os.path.join("scripts", "check-package.mjs")):
             os.makedirs(os.path.dirname(os.path.join(tree, rel)), exist_ok=True)
             shutil.copy(os.path.join(ROOT, rel), os.path.join(tree, rel))
@@ -316,6 +316,30 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
         proc = subprocess.run(["node", os.path.join(tree, "scripts", "check-package.mjs")], cwd=tree, capture_output=True, text=True)
         ok = (proc.returncode == 0) == expect_ok
         check(ok, f"check-package {'accepts' if expect_ok else 'refuses'}: {label}" + ("" if ok else f"\n{proc.stdout}{proc.stderr}"))
+
+    # the icon check: a complete 512x512 PNG passes; a missing, truncated, wrong-chunk or wrong-size file fails with a message
+    with open(os.path.join(ROOT, "mcpb", "icon.png"), "rb") as f:
+        icon_good = f.read()
+
+    def icon_case(label, data, expect_ok):
+        path = os.path.join(work, "icon-case.png")
+        if data is None:
+            if os.path.exists(path):
+                os.remove(path)
+        else:
+            with open(path, "wb") as f:
+                f.write(data)
+        proc = subprocess.run(["node", os.path.join(ROOT, "scripts", "check-icon.mjs"), path], capture_output=True, text=True)
+        ok = (proc.returncode == 0) == expect_ok and "Error:" not in proc.stderr and "    at " not in proc.stderr
+        check(ok, f"icon check {'accepts' if expect_ok else 'refuses'}: {label}" + ("" if ok else f"\n{proc.stdout}{proc.stderr}"))
+
+    icon_case("the committed icon", icon_good, True)
+    icon_case("a missing file (readable message, no stack trace)", None, False)
+    icon_case("a truncated file", icon_good[:-1], False)
+    icon_case("a file cut before IEND", icon_good[:-12], False)
+    icon_case("a file that is not a PNG", b"GIF89a" + icon_good[6:], False)
+    icon_case("a PNG whose first chunk is not IHDR", icon_good[:12] + b"IDAT" + icon_good[16:], False)
+    icon_case("a PNG of another size", icon_good[:16] + (256).to_bytes(4, "big") + icon_good[20:], False)
 
     private_case("private true", True, False, True)
     private_case("private false with the version in the changelog (the release PR)", False, True, True)

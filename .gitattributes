@@ -1,3 +1,5 @@
 * text=auto eol=lf
 # The bundle is byte-exact (no eol conversion) and hidden from PR diffs: the CI check dist == build(src) is the control.
 dist/** -text -diff linguist-generated=true
+# the .mcpb icon is binary (the pack script compares it byte for byte)
+mcpb/icon.png binary

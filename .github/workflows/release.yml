@@ -78,7 +78,7 @@ jobs:
         run: |
           mkdir release
           cp dist/mothdex-mcp.mjs "release/mothdex-mcp_${TAG#v}.mjs"
-          # validates the manifest, packs, lists the members (exactly two), compares them with the committed files and
+          # validates the manifest, packs, lists the members (exactly three: manifest, icon, bundle), compares them with the committed files and
           # smokes the bundle inside the archive; the version in the file name is package.json's, which equals the tag
           scripts/pack-mcpb.sh release
           # the npm tarball is made here, once, from the clean tree, and attested like the other files; the npm job publishes
