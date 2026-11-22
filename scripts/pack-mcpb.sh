@@ -43,12 +43,8 @@ mcpb() { pnpm --dir tools/mcpb exec mcpb "$@"; }
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/mcpb.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-# The icon is the committed PNG (project-owned art approved in D30), 512x512, referenced by manifest.json as "icon.png".
-node -e '
-  const b = require("node:fs").readFileSync("mcpb/icon.png");
-  const png = b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-  if (!png || b.readUInt32BE(16) !== 512 || b.readUInt32BE(20) !== 512) { console.error("mcpb/icon.png must be a 512x512 PNG"); process.exit(1); }
-' || fail "mcpb/icon.png is not a 512x512 PNG"
+# The icon is the committed PNG (project-owned art approved in D30), complete and 512x512, referenced by manifest.json as "icon.png".
+node scripts/check-icon.mjs mcpb/icon.png || fail "mcpb/icon.png is not a complete 512x512 PNG"
 [ "$(node -p "require('./mcpb/manifest.json').icon")" = "icon.png" ] || fail "mcpb/manifest.json must reference the icon as icon.png"
 mkdir -p "$work/stage/dist"
 cp mcpb/manifest.json "$work/stage/manifest.json"
