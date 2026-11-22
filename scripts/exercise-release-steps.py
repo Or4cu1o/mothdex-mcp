@@ -320,6 +320,90 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
     private_case("private true", True, False, True)
     private_case("private false with the version in the changelog (the release PR)", False, True, True)
     private_case("private false without the version in the changelog", False, False, False)
+    private_case("private as the text 'false', with the version in the changelog", "false", True, False)
+
+    # QA: the npm publish guard and the registry re-entry, run with fake `npm` and `curl` programs first on PATH. The real
+    # programs are never called, so nothing here touches the network or a registry, and the result does not depend on whether
+    # this version has been published since.
+    shims = os.path.join(work, "shims")
+    os.makedirs(shims)
+
+    def write_shim(name, body):
+        path = os.path.join(shims, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("#!/bin/bash\n" + body)
+        os.chmod(path, 0o755)
+
+    write_shim("npm", 'echo "npm $*" >> "$FAKE_LOG"\ncase "$1" in view) printf "%s" "${FAKE_NPM_VIEW-}"; exit "${FAKE_NPM_VIEW_RC:-0}" ;; esac\nexit 0\n')
+    write_shim("curl", 'echo "curl $*" >> "$FAKE_LOG"\nout=""; while [ $# -gt 0 ]; do case "$1" in -o) out=$2; shift ;; esac; shift; done\n'
+               '[ -n "$out" ] && printf "%s" "${FAKE_CURL_BODY-}" > "$out"; printf "%s" "${FAKE_CURL_CODE:-000}"\n')
+    PUBLISH = "Publish the verified tarball (no repack, no retry)"
+    pubdir = os.path.join(work, "pubwork")
+    os.makedirs(os.path.join(pubdir, "release"))
+    pub_tgz = os.path.join(pubdir, "release", f"mothdex-mcp-{version}.tgz")
+
+    def publish_case(label, view_out, view_rc, expect_rc_ok, expect_publish, tamper=False):
+        shutil.copy(good, pub_tgz)
+        with open(os.path.join(pubdir, "release", "checksums.txt"), "w", encoding="utf-8") as f:
+            f.write(subprocess.run(["sha256sum", os.path.basename(pub_tgz)], cwd=os.path.dirname(pub_tgz), capture_output=True, text=True).stdout)
+        if tamper:
+            with open(pub_tgz, "ab") as f:
+                f.write(b"x")
+        log = os.path.join(work, "fake.log")
+        open(log, "w", encoding="utf-8").close()
+        penv = dict(env, PATH=shims + os.pathsep + os.environ["PATH"], FAKE_LOG=log, FAKE_NPM_VIEW=view_out, FAKE_NPM_VIEW_RC=str(view_rc))
+        rc3, out3 = run_step(workflow, "npm", PUBLISH, pubdir, penv)
+        calls = open(log, encoding="utf-8").read().splitlines()
+        published = [c for c in calls if c.startswith("npm publish")]
+        ok = ((rc3 == 0) == expect_rc_ok) and (len(published) == (1 if expect_publish else 0))
+        if expect_publish and published:
+            ok = ok and published[0] == f"npm publish ./release/mothdex-mcp-{version}.tgz --provenance --access public --ignore-scripts --registry https://registry.npmjs.org/"
+        check(ok, f"npm publish guard: {label}" + ("" if ok else f"\n{out3}\n{calls}"))
+
+    publish_case("the version is already on npm: nothing is published", version, 0, True, False)
+    publish_case("not on npm (empty answer): published once with the exact flags", "", 0, True, True)
+    publish_case("not on npm (empty answer, failing status): published once", "", 1, True, True)
+    publish_case("not on npm (E404): published once", "npm error code E404\nnpm error 404 Not Found", 1, True, True)
+    publish_case("another error (E401): stopped, nothing published", "npm error code E401", 1, False, False)
+    publish_case("another version in the answer: stopped, nothing published", "0.0.9", 0, False, False)
+    publish_case("the tarball changed after verification: stopped before npm is asked", "", 0, False, False, tamper=True)
+
+    # the registry read: a state step that never sends the version twice and never overwrites a different .mcpb
+    shutil.copy(os.path.join(ROOT, "server.json"), os.path.join(release, "server.json"))
+    with open(os.path.join(release, "checksums.txt"), "w", encoding="utf-8") as f:
+        f.write(f"{mcpb_sha}  mothdex-mcp_{version}.mcpb\n")
+    rcg, _ = run_step(workflow, "registry", GENERATE, work, env)
+    STATE = "Is this version already in the registry?"
+
+    def state_case(label, code, body, expect_ok, expect_state):
+        out_file = os.path.join(work, "github_output")
+        open(out_file, "w", encoding="utf-8").close()
+        log = os.path.join(work, "fake.log")
+        open(log, "w", encoding="utf-8").close()
+        senv = dict(env, PATH=shims + os.pathsep + os.environ["PATH"], FAKE_LOG=log, FAKE_CURL_CODE=code, FAKE_CURL_BODY=body, GITHUB_OUTPUT=out_file)
+        rc4, out4 = run_step(workflow, "registry", STATE, work, senv)
+        state_out = open(out_file, encoding="utf-8").read().strip()
+        ok = ((rc4 == 0) == expect_ok) and state_out == expect_state
+        check(ok, f"registry re-entry: {label}" + ("" if ok else f"\n{out4}\n{state_out!r}"))
+
+    same = json.dumps({"server": {"packages": [{"registryType": "npm"}, {"registryType": "mcpb", "fileSha256": mcpb_sha}]}})
+    other = json.dumps({"server": {"packages": [{"registryType": "npm"}, {"registryType": "mcpb", "fileSha256": "b" * 64}]}})
+    nombcp = json.dumps({"server": {"packages": [{"registryType": "npm"}]}})
+    check(rcg == 0, "the generated server.json for the registry cases exists")
+    state_case("404: not published yet, present=false", "404", "", True, "present=false")
+    state_case("200 with the same .mcpb hash: present=true, nothing to send", "200", same, True, "present=true")
+    state_case("200 with another .mcpb hash: stopped", "200", other, False, "")
+    state_case("200 without an mcpb package: stopped", "200", nombcp, False, "")
+    state_case("200 with an unreadable body: stopped", "200", "not json", False, "")
+    state_case("HTTP 500: stopped", "500", "", False, "")
+    state_case("HTTP 403: stopped", "403", "", False, "")
+    # the name has a slash, so the URL must carry it encoded, and the version of the tag
+    state_case("the request goes to the encoded name and the tag's version", "404", "", True, "present=false")
+    asked = [c for c in open(os.path.join(work, "fake.log"), encoding="utf-8").read().splitlines() if c.startswith("curl ")]
+    check(len(asked) == 1 and asked[0].endswith(f"https://registry.modelcontextprotocol.io/v0/servers/io.github.Or4cu1o%2Fmothdex-mcp/versions/{version}"),
+          "the registry read asks https://registry.modelcontextprotocol.io/v0/servers/<name, url-encoded>/versions/<version> once" + ("" if len(asked) == 1 else f"\n{asked}"))
+    publish_state = step(workflow, "registry", "Log in with GitHub OIDC and publish (no retry)")
+    check(publish_state.get("if") == "steps.state.outputs.present != 'true'", "the registry login and publish step runs only when the version is not there")
 
     if with_publisher:
         with open(os.path.join(release, "checksums.txt"), "w", encoding="utf-8") as f:
@@ -335,13 +419,6 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
                 proc.returncode == 0,
                 "mcp-publisher validate accepts the generated server.json" + ("" if proc.returncode == 0 else f"\n{proc.stdout}{proc.stderr}"),
             )
-            # the registry read the re-entrance relies on: this version is not there yet, so the answer is 404 and present=false
-            out_file = os.path.join(work, "github_output")
-            open(out_file, "w", encoding="utf-8").close()
-            rc, out = run_step(workflow, "registry", "Is this version already in the registry?", work, dict(env, GITHUB_OUTPUT=out_file))
-            with open(out_file, encoding="utf-8") as f:
-                state = f.read().strip()
-            check(rc == 0 and state == "present=false", "the registry read says this version is not published yet (HTTP 404)" + ("" if rc == 0 else f"\n{out}"))
 
 if failures:
     sys.exit(f"exercise-release-steps: {len(failures)} check(s) failed")
