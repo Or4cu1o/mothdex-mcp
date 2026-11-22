@@ -1,6 +1,7 @@
 import type { McpServer, StandardSchemaWithJSON } from "@modelcontextprotocol/server";
 import type * as z from "zod/v4";
-import { InvalidRequest, toToolError } from "./errors";
+import { isMothdexError } from "../api";
+import { describeApiError, InvalidRequest, toToolError } from "./errors";
 import type { Env } from "./operations";
 
 /**
@@ -33,7 +34,8 @@ export const success = (structuredContent: Json) => ({
   structuredContent,
 });
 
-export function failure(error: unknown) {
+export function failure(error: unknown, warn?: (message: string) => void) {
+  if (isMothdexError(error)) warn?.(describeApiError(error));
   const { code, message, retryable, retryAfterS } = toToolError(error);
   const body = {
     error: {
@@ -70,10 +72,11 @@ export function registerReadTool<I extends z.ZodObject, O extends z.ZodObject>(
       if (!parsed.success) {
         return failure(new InvalidRequest(`invalid arguments: ${describeIssues(parsed.error)}`));
       }
+      const env = makeEnv(ctx.mcpReq.signal);
       try {
-        return success((await spec.run(makeEnv(ctx.mcpReq.signal), parsed.data)) as Json);
+        return success((await spec.run(env, parsed.data)) as Json);
       } catch (error) {
-        return failure(error);
+        return failure(error, env.warn);
       }
     },
   );

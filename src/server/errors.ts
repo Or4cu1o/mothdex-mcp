@@ -1,4 +1,5 @@
-import { type ErrorKind, isMothdexError } from "../api";
+import { type ErrorKind, isMothdexError, type MothdexError } from "../api";
+import { cleanMessage } from "../api/parse";
 
 /** Codes of docs/contracts/mcp/tools.md "Errors". */
 export type ToolErrorCode =
@@ -89,7 +90,28 @@ const CODES: Readonly<Record<ErrorKind, ToolErrorCode>> = {
 
 const RETRYABLE: ReadonlySet<ErrorKind> = new Set(["network", "upstream", "rate_limited"]);
 
-/** Never leaks a stack trace or a cause: only the client's already cleaned message. */
+/** One fixed English message per code: nothing the upstream said reaches the model (it goes to the stderr log). */
+const API_MESSAGES: Readonly<Record<ErrorKind, string>> = {
+  network: "the request to the Mothdex API failed on the network",
+  not_found: "entry not found",
+  invalid_request: "the Mothdex API did not accept the request",
+  upstream: "the Mothdex API answered with an error",
+  api: "the Mothdex API answered with an error",
+  decode: "the Mothdex API answered in a form this server does not understand",
+  api_incompatible: "the Mothdex API answered in a form this server does not understand",
+  rate_limited: "the Mothdex API rate limit was reached",
+  canceled: "the request was canceled",
+  untrusted_redirect: "the Mothdex API redirected the request to another place",
+};
+
+/** The stderr line for a client error: numbers, the upstream code and a message cut to 200 bytes. */
+export function describeApiError(error: MothdexError): string {
+  const code = error.code === "" ? "" : ` code ${error.code}`;
+  const text = error.detail === "" ? "" : `: ${cleanMessage(error.detail, 200)}`;
+  return `${error.op} failed: ${error.kind}${error.httpStatus === 0 ? "" : ` (HTTP ${error.httpStatus})`}${code}${text}`;
+}
+
+/** Never leaks a stack trace, a cause or an upstream message: the text is fixed per kind. */
 export function toToolError(error: unknown): ToolError {
   if (error instanceof InvalidRequest) {
     return { code: "invalid_request", message: error.message, retryable: false };
@@ -109,7 +131,7 @@ export function toToolError(error: unknown): ToolError {
         : undefined;
     return {
       code,
-      message: error.message,
+      message: API_MESSAGES[error.kind],
       retryable: RETRYABLE.has(error.kind),
       ...(retryAfterS === undefined ? {} : { retryAfterS }),
     };

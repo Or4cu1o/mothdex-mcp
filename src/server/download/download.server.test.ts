@@ -93,6 +93,22 @@ describe("download_file over MCP", () => {
     expect(JSON.parse(text)).toEqual(result.structuredContent);
   });
 
+  it("an upstream error code gives the fixed message and the text only reaches the log", async () => {
+    rig = makeRig({ replies: [] });
+    const warnings: string[] = [];
+    const body = JSON.stringify({
+      info: { error: "ENTRY_NOT_FOUND", message: "SECRET-TEXT" },
+      data: {},
+    });
+    harness = await startHarness([{ body }], (message) => warnings.push(message), rig.rt);
+    const result = await call(harness, { slug: "doom-1993-dos", link_index: 1 });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("SECRET-TEXT");
+    expect(warnings.some((w) => w.includes("ENTRY_NOT_FOUND") && w.includes("SECRET-TEXT"))).toBe(
+      true,
+    );
+  });
+
   it("an existing file is a result with isError false and status exists", async () => {
     const h = await start();
     await call(h, { slug: "game-1", link_index: 1 });

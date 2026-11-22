@@ -85,16 +85,12 @@ export function registerDownloadTool(
           params: { progressToken, progress: value, total },
         }),
       );
+      const env = makeEnv(ctx.mcpReq.signal);
       try {
-        const result = await runDownload(
-          runtime,
-          makeEnv(ctx.mcpReq.signal),
-          parsed.data,
-          progress.report,
-        );
+        const result = await runDownload(runtime, env, parsed.data, progress.report);
         return success(result as unknown as Json);
       } catch (error) {
-        return failure(error);
+        return failure(error, env.warn);
       } finally {
         progress.stop();
       }

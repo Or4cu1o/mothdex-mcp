@@ -186,6 +186,47 @@ describe("slugs from the API", () => {
 });
 
 describe("API failures", () => {
+  it("an upstream code gives the fixed message; the upstream text only reaches the stderr log", async () => {
+    const warnings: string[] = [];
+    const text = `SECRET-TEXT\u001b[31m${"x".repeat(400)}`;
+    harness = await startHarness(
+      [{ body: JSON.stringify({ info: { error: "ENTRY_NOT_FOUND", message: text }, data: {} }) }],
+      (message) => warnings.push(message),
+    );
+    const result = await call(harness, "get_entry", { slug: "doom-1993-dos" });
+    expect(result.structuredContent).toEqual({
+      error: { code: "not_found", message: "entry not found", retryable: false },
+    });
+    expect(JSON.stringify(result)).not.toContain("SECRET-TEXT");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("code ENTRY_NOT_FOUND");
+    expect(warnings[0]).toContain("SECRET-TEXT");
+    expect(warnings[0]).not.toContain("\u001b");
+    expect(Buffer.byteLength(warnings[0] ?? "", "utf8")).toBeLessThan(300);
+  });
+
+  it("RATE_LIMIT_ERROR on a 200 is rate_limited and retryable", async () => {
+    const body = JSON.stringify({ info: { error: "RATE_LIMIT_ERROR", message: "m" }, data: {} });
+    const h = await start(
+      { body, headers: { "retry-after": "7" } },
+      { body, headers: { "retry-after": "7" } },
+    );
+    const result = await call(h, "db_info");
+    expect(result.structuredContent).toMatchObject({
+      error: { code: "rate_limited", retryable: true, retry_after_s: 7 },
+    });
+  });
+
+  it("an unknown code is upstream and not retryable", async () => {
+    const h = await start({
+      body: JSON.stringify({ info: { error: "NEW_CODE", message: "m" }, data: {} }),
+    });
+    const result = await call(h, "db_info");
+    expect(result.structuredContent).toMatchObject({
+      error: { code: "upstream", retryable: false },
+    });
+  });
+
   it("429 becomes rate_limited with retry_after_s", async () => {
     const h = await start(
       { status: 429, headers: { "retry-after": "7" } },
@@ -226,6 +267,20 @@ describe("resources and prompts", () => {
   it("a missing entry is a resource-not-found error", async () => {
     const h = await start(ok("entry-not-found.json"));
     await expect(h.mcp.readResource({ uri: "mothdex://entry/nope" })).rejects.toThrow();
+  });
+
+  it("a resource failure gives the fixed message; the upstream text only reaches the log", async () => {
+    const warnings: string[] = [];
+    const body = JSON.stringify({ info: { error: "DB_ERROR", message: "SECRET-TEXT" }, data: {} });
+    harness = await startHarness([{ body }], (message) => warnings.push(message));
+    const error = await harness.mcp
+      .readResource({ uri: "mothdex://platforms" })
+      .catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).not.toContain("SECRET-TEXT");
+    expect(warnings.some((w) => w.includes("code DB_ERROR") && w.includes("SECRET-TEXT"))).toBe(
+      true,
+    );
   });
 
   it("prompts quote user text and name the tools to call", async () => {
