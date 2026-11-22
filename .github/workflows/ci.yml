@@ -97,6 +97,8 @@ jobs:
         with:
           persist-credentials: false
       - run: docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 -color
+      - name: The release jobs that do not publish, exercised (npm tarball rules, server.json, the pinned mcp-publisher)
+        run: python3 scripts/exercise-release-steps.py --with-publisher
       - name: shellcheck the release scripts
         run: |
           shellcheck -s bash scripts/pack-mcpb.sh

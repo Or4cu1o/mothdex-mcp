@@ -28,7 +28,15 @@ pinned=$(node -p "require('./tools/mcpb/package.json').devDependencies['@anthrop
 [ "$installed" = "$pinned" ] || fail "the installed mcpb is $installed, tools/mcpb/package.json pins $pinned"
 excluded=$(awk '/^trustPolicyExclude:/ { f = 1; next } f && /^[[:space:]]+-[[:space:]]/ { sub(/^[[:space:]]+-[[:space:]]+/, ""); print; next } f { exit }' tools/mcpb/pnpm-workspace.yaml)
 [ "$excluded" = "undici-types@6.21.0" ] || fail "trustPolicyExclude in tools/mcpb/pnpm-workspace.yaml is not exactly undici-types@6.21.0: $excluded"
-grep -qx 'trustPolicy: no-downgrade' tools/mcpb/pnpm-workspace.yaml || fail "tools/mcpb/pnpm-workspace.yaml must keep trustPolicy: no-downgrade"
+# every supply-chain setting of the root is repeated, with the same value, in tools/mcpb (nothing weaker there)
+for key in engineStrict strictDepBuilds minimumReleaseAge blockExoticSubdeps trustPolicy; do
+  root_line=$(grep -E "^${key}:" pnpm-workspace.yaml || true)
+  tool_line=$(grep -E "^${key}:" tools/mcpb/pnpm-workspace.yaml || true)
+  if [ -z "$root_line" ] || [ "$root_line" != "$tool_line" ]; then fail "tools/mcpb/pnpm-workspace.yaml must have '$root_line' like the root (it has '$tool_line')"; fi
+done
+# the accepted advisories are exactly these three, each reviewed (reasons in tools/mcpb/pnpm-workspace.yaml)
+ignored=$(awk '/^[[:space:]]+ignoreGhsas:/ { f = 1; next } f && /^[[:space:]]*#/ { next } f && /^[[:space:]]+-[[:space:]]/ { sub(/^[[:space:]]+-[[:space:]]+/, ""); print; next } f { exit }' tools/mcpb/pnpm-workspace.yaml | sort | tr '\n' ' ')
+[ "$ignored" = "GHSA-52f5-9888-hmc6 GHSA-mrhx-c7xc-m3w5 GHSA-ph9p-34f9-6g65 " ] || fail "ignoreGhsas in tools/mcpb/pnpm-workspace.yaml is not exactly the three reviewed advisories: $ignored"
 
 # `pnpm --dir tools/mcpb exec` runs in tools/mcpb, so every path given to it is absolute.
 mcpb() { pnpm --dir tools/mcpb exec mcpb "$@"; }

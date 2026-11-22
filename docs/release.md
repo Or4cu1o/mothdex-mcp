@@ -11,7 +11,9 @@ The release is a tag. Nothing here runs until the owner creates a `v*` tag; no w
   yet (backlog `mcpb-icon`, after the brand session); the list check in `scripts/pack-mcpb.sh` says so and changes when it lands.
   The container is **not reproducible**: `mcpb pack` stamps the time of packing in the zip, so two packs of the same files differ. Integrity rests on
   the attestation of the packed file and on the byte-for-byte check of its two members against the committed files.
-- `checksums.txt` (SHA-256 of both files), and a GitHub build-provenance attestation for each of them and for `checksums.txt`.
+- `mothdex-mcp-<version>.tgz`: the npm tarball, made once in the build job (`npm pack --ignore-scripts`) and published to npm by the
+  `npm` job as it is. `server.json`: the committed MCP registry file, which the `registry` job extends with the `.mcpb` entry.
+- `checksums.txt` (SHA-256 of all four files), and a GitHub build-provenance attestation for each of them and for `checksums.txt`.
 
 ## How the pipeline works
 
@@ -27,6 +29,8 @@ The release is a tag. Nothing here runs until the owner creates a `v*` tag; no w
   commit, no self-hosted runner), checks that the files to upload are exactly the ones `checksums.txt` lists plus itself,
   and as its last check before `gh release create --verify-tag` that the tag still resolves to the commit that was built
   (annotated tags followed, one API call per object).
+- After `publish`, the `npm` job (environment `release`) and then the `registry` job (environment `mcp-registry`) run, as
+  described in the section on publishing below.
 - `ci.yml` also lints the workflows with a pinned actionlint image, and its `dist == build(src)` job runs `pnpm check:package`
   and `scripts/pack-mcpb.sh` on every pull request, so the `.mcpb` path is exercised before any tag. No new check name:
   both run inside that existing job.
@@ -129,12 +133,19 @@ Verified while preparing this: `actionlint` (pinned image) clean; `release.yml` 
 verified:** any real tag run (`gh attestation verify`, the tag-to-commit check, `--verify-tag`, the environment approval), and
 the marketplace install from the pinned tag.
 
-## Planned: publishing to npm and to the MCP registry (design only, not implemented)
+## Publishing to npm and to the MCP registry (implemented in `release.yml`, dormant)
 
-Status: the design that phase B of T-82 codes against, as constrained by Sentinela's threat model (constraints MP-1 to MP-13,
-owner settings O-1 to O-8). Nothing in this section runs today: `package.json` stays `private: true`, no workflow publishes
-anywhere, there is no npm login and no token. Owner decisions it rests on: D28 6b (the npm package name is the unscoped
-`mothdex-mcp`), D28 3 (no tag until the planned scope is finished), D28 1c (the owner identity, no bot).
+Status: implemented as designed by Sentinela's threat model (constraints MP-1 to MP-13, owner settings O-1 to O-8) and **never run
+on a tag**. It is dormant: `package.json` says `private: true`, so the `npm` job refuses the tarball (and npm itself would), and
+the jobs need the environments and the trusted publisher the owner has not configured yet. There is no npm login and no token.
+A job that cannot run without a tag is checked statically: `actionlint` (shellcheck inside), and the CI step
+`scripts/exercise-release-steps.py --with-publisher`, which runs the real `run:` text of the tarball-rules step and of the
+`server.json` step against files built from the tree (positive and negative cases), fetches the pinned `mcp-publisher` through
+the registry job's own step (hash and Sigstore bundle verified) and runs `mcp-publisher validate` on the generated file. What
+stays unverified until the first tag: `gh attestation verify` in these jobs, npm trusted publishing and `--provenance`,
+`npm audit signatures`, `mcp-publisher login github-oidc` and `publish`, and the shape of npm's provenance endpoint (a
+different shape is a warning, a different workflow or ref is a failure). Owner decisions it rests on: D28 6b (the npm package
+name is the unscoped `mothdex-mcp`), D28 3 (no tag until the planned scope is finished), D28 1c (the owner identity, no bot).
 
 ### Principles
 

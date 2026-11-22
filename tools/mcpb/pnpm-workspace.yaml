@@ -9,8 +9,9 @@ blockExoticSubdeps: true
 trustPolicy: no-downgrade
 trustPolicyExclude:
   - undici-types@6.21.0
-# The audit job (CI) runs `pnpm audit --audit-level high` on this project too. Exactly these three advisories are accepted,
-# each with its reason; any new advisory fails the job. Nothing here ships and the job is read-only.
+# The audit job (CI) runs `pnpm audit --audit-level high` on this project too. Exactly these three advisories are accepted
+# (two high, one low), each with its reason; any new advisory fails the job, and scripts/pack-mcpb.sh pins this list. Review it
+# on EVERY mcpb bump: a bump can fix some of them (remove the entry) or bring new ones. Nothing here ships and the job is read-only.
 auditConfig:
   ignoreGhsas:
     # tmp (path traversal), reached only through mcpb > @inquirer/editor > external-editor: the interactive editor prompt of
@@ -18,6 +19,6 @@ auditConfig:
     - GHSA-ph9p-34f9-6g65
     # tmp (low), the same path and the same reason.
     - GHSA-52f5-9888-hmc6
-    # zod (memory exhaustion on oversized constrained collections), mcpb > zod 3.25.76: it validates only our own committed
-    # manifest, never untrusted input.
+    # zod (memory exhaustion on oversized constrained collections), mcpb > zod 3.25.76 (and mcpb > zod-to-json-schema > zod): it
+    # validates only our own committed manifest, never untrusted input.
     - GHSA-mrhx-c7xc-m3w5
