@@ -249,8 +249,11 @@ For **phase B**, only when the owner decides to publish (O-1 to O-8 of the threa
    `.npmrc` (CODEOWNERS, as recommended for mothdex-cli; with one identity it needs the owner's decision, see PR-78).
 8. **O-8:** how the registry scopes a `github-oidc` login (the repository or the owner namespace) is to be checked in phase B; if it
    is the namespace, no other repository of `Or4cu1o` should run `mcp-publisher`, or the owner accepts the residual.
+   A pre-release tag (`vX.Y.Z-rc.1`) is a GitHub pre-release only: both publishing jobs are skipped for it (npm would need `--tag`,
+   and the registry lists stable versions).
 9. The release pull request flips `private` to `false` and bumps the versions (T-66 item 5); until then `npm publish` is refused by
-   npm itself, which is the intended gate.
+   npm itself, which is the intended gate. `pnpm check:package` accepts `private: false` only when `CHANGELOG.md` has the section of that version (the changelog
+   fold of the same release pull request), so the release PR and the tag build pass and any other flip is refused.
 
 ### Residuals
 

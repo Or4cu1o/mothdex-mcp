@@ -1,7 +1,8 @@
 name: Release
 
-# Runs only for version tags. Three jobs with separate permissions:
-# build (read-only repo) -> attest (OIDC + attestations) -> publish (the only job that can write contents).
+# Runs only for version tags. Five jobs with separate permissions, each one needing the previous ones:
+# build (read-only repo) -> attest (OIDC + attestations) -> publish (the only job that can write contents)
+# -> npm (environment release, OIDC for npm) -> registry (environment mcp-registry, OIDC for the MCP registry).
 # The release files are the single-file bundle and the .mcpb that wraps it; both are listed in checksums.txt, so the
 # attestation of checksums.txt's subjects covers both, and publish verifies and uploads exactly that set.
 # After the GitHub release, two more jobs publish: `npm` (environment `release`, trusted publishing) and `registry` (its own
@@ -186,6 +187,8 @@ jobs:
   npm:
     name: publish to npm
     needs: [build, attest, publish]
+    # a pre-release tag (vX.Y.Z-rc.1) is a GitHub pre-release only: npm would need --tag for it and the registry lists stable versions
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: release
@@ -227,16 +230,21 @@ jobs:
         with:
           node-version: 26.13.1
           package-manager-cache: false
-      - name: Pin the npm configuration and the npm version
+      - name: Pin the npm configuration
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/npm"
-          : > "$RUNNER_TEMP/npm/empty.npmrc"
+          # two different empty files: npm must not see one path as both its user and its global configuration
+          : > "$RUNNER_TEMP/npm/user.npmrc"
+          : > "$RUNNER_TEMP/npm/global.npmrc"
           {
-            echo "NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/npm/empty.npmrc"
-            echo "NPM_CONFIG_GLOBALCONFIG=$RUNNER_TEMP/npm/empty.npmrc"
+            echo "NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/npm/user.npmrc"
+            echo "NPM_CONFIG_GLOBALCONFIG=$RUNNER_TEMP/npm/global.npmrc"
             echo "NPM_CONFIG_REGISTRY=https://registry.npmjs.org/"
           } >> "$GITHUB_ENV"
+      - name: The Node and npm versions are the pinned ones
+        run: |
+          set -euo pipefail
           [ "$(node --version)" = "v26.13.1" ] || { echo "node is $(node --version), expected v26.13.1"; exit 1; }
           [ "$(npm --version)" = "11.20.0" ] || { echo "npm is $(npm --version), expected 11.20.0 (the one bundled with that Node)"; exit 1; }
       - name: No other npm configuration is in effect
@@ -258,6 +266,7 @@ jobs:
           echo "$pj" | jq -e --arg v "$version" '
             .name == "mothdex-mcp" and .version == $v and .private == false and .mcpName == "io.github.Or4cu1o/mothdex-mcp"
             and (.bin == {"mothdex-mcp": "dist/mothdex-mcp.mjs"})
+            and (.publishConfig == {"access": "public", "provenance": true})
             and ((.dependencies // {}) == {}) and ((.optionalDependencies // {}) == {}) and ((.peerDependencies // {}) == {})
             and (.bundleDependencies == null) and (.bundledDependencies == null)
             and ([(.scripts // {}) | keys[] | select(test("^(pre|post)?(install|prepare|publish|pack|prepublishOnly|prepublish)$"))] == [])' >/dev/null \
@@ -329,6 +338,7 @@ jobs:
   registry:
     name: publish to the MCP registry
     needs: [build, attest, publish, npm]
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: mcp-registry

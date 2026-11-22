@@ -22,8 +22,17 @@ for (const field of [
     problems.push(`package.json has ${field}: the bundle must be self-contained`);
   }
 }
-// The release PR flips this one line on purpose, together with the version bump.
-if (pkg.private !== true) problems.push("package.json private must be true until the release PR");
+// The release PR flips this one line on purpose, together with the version bump and the changelog fold: private may be
+// false only when CHANGELOG.md has the section of this very version (so the tag build and the release PR both pass,
+// and a flip that is not a release is refused).
+if (pkg.private !== true) {
+  const changelog = readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8");
+  const heading = new RegExp(`^## \\[${pkg.version.replace(/[.+-]/g, "\\$&")}\\]`, "m");
+  if (pkg.private !== false || !heading.test(changelog))
+    problems.push(
+      "package.json private may be false only in the release PR: CHANGELOG.md must have the section of this version",
+    );
+}
 const dist = readFileSync(new URL("../dist/mothdex-mcp.mjs", import.meta.url));
 if (!dist.toString("utf8", 0, 32).startsWith("#!/usr/bin/env node\n")) {
   problems.push("dist/mothdex-mcp.mjs must start with the node shebang (npm links bin as it is)");

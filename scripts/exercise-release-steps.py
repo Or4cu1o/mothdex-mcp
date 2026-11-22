@@ -18,6 +18,7 @@ Nothing here publishes, signs or logs in.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -117,6 +118,21 @@ check(workflow["jobs"]["registry"]["needs"] == ["build", "attest", "publish", "n
 check(workflow["jobs"]["npm"]["environment"] != workflow["jobs"]["registry"]["environment"], "the two publishing jobs use different environments")
 node_step = next(x for x in workflow["jobs"]["npm"]["steps"] if str(x.get("uses", "")).startswith("actions/setup-node"))
 check(str(node_step["with"]["node-version"]) == "26.13.1", "the npm job pins Node 26.13.1")
+# QA and Crivo: a pre-release tag skips both publishing jobs; the verification block of the two jobs is the same text; the publish
+# steps carry the exact flags and no retry or loop; the npm pin steps behave (run below).
+for job_name in ("npm", "registry"):
+    check("github.ref_name" in str(workflow["jobs"][job_name].get("if", "")) and "'-'" in str(workflow["jobs"][job_name].get("if", "")),
+          f"job {job_name} is skipped for a pre-release tag")
+VERIFY = "Verify checksums, attestations and the tag before any token is used"
+check(step(workflow, "npm", VERIFY)["run"] == step(workflow, "registry", VERIFY)["run"], "the verification step is the same text in the npm and registry jobs")
+for job_name, step_name in (("npm", "Publish the verified tarball (no repack, no retry)"), ("registry", "Log in with GitHub OIDC and publish (no retry)")):
+    code = "\n".join(line for line in step(workflow, job_name, step_name)["run"].splitlines() if not line.lstrip().startswith("#"))
+    check(re.search(r"(^|[\s;|&(])(for|while|until)\s", code) is None and not any(w in code for w in ("retry", "sleep ")),
+          f"{job_name} publish step has no loop or retry")
+npm_publish = step(workflow, "npm", "Publish the verified tarball (no repack, no retry)")["run"]
+check('npm publish "./release/$name" --provenance --access public --ignore-scripts --registry https://registry.npmjs.org/' in npm_publish,
+      "the npm publish line has the exact flags (by path, provenance, public, no scripts, forced registry)")
+check("npm pack" not in json.dumps(workflow["jobs"]["npm"]) and "npm publish ." not in npm_publish, "the npm job never packs and never publishes a directory")
 with open(os.path.join(ROOT, "package.json"), encoding="utf-8") as f:
     version = json.load(f)["version"]
 tag = f"v{version}"
@@ -169,6 +185,8 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
     variant("a prepare script", edit_package_json(scripts={"prepare": "node -e 0"}))
     variant("a prepublishOnly script", edit_package_json(scripts={"prepublishOnly": "node -e 0"}))
     variant("an install script", edit_package_json(scripts={"install": "node -e 0"}))
+    variant("no provenance in publishConfig", edit_package_json(publishConfig={"access": "public"}))
+    variant("a restricted access in publishConfig", edit_package_json(publishConfig={"access": "restricted", "provenance": True}))
 
     def link_license(tmp):  # an allowed name, but a link: only the check by type can see it
         path = os.path.join(tmp, "package", "LICENSE")
@@ -245,6 +263,63 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
         f.write(f"not-a-hash  mothdex-mcp_{version}.mcpb\n")
     rc, _ = run_step(workflow, "registry", GENERATE, work, env)
     check(rc != 0, "a checksums.txt line that is not 64 hex characters is refused")
+
+    # a tag that is not a semantic version never reaches the generated file (QA S2)
+    shutil.copy(os.path.join(ROOT, "server.json"), os.path.join(release, "server.json"))
+    with open(os.path.join(release, "checksums.txt"), "w", encoding="utf-8") as f:
+        f.write(f"{mcpb_sha}  mothdex-mcp_{version}.mcpb\n")
+    for bad_tag in ("vfoo", "v1.2", "v1.2.3;touch-x", "v1.2.3 ", "v1.2.3/../x"):
+        rc, _ = run_step(workflow, "registry", GENERATE, work, dict(env, TAG=bad_tag))
+        check(rc != 0, f"the generate step refuses the tag {bad_tag!r}")
+
+    # the npm configuration pins: the step writes two different empty files and the registry; the check refuses anything else
+    github_env = os.path.join(work, "github_env")
+    open(github_env, "w", encoding="utf-8").close()
+    rc, out = run_step(workflow, "npm", "Pin the npm configuration", work, dict(env, GITHUB_ENV=github_env))
+    pinned = dict(line.split("=", 1) for line in open(github_env, encoding="utf-8").read().split("\n") if "=" in line)
+    check(rc == 0 and pinned.get("NPM_CONFIG_USERCONFIG") != pinned.get("NPM_CONFIG_GLOBALCONFIG") and pinned.get("NPM_CONFIG_REGISTRY") == "https://registry.npmjs.org/",
+          "the npm pin step writes two different config files and the registry" + ("" if rc == 0 else f"\n{out}"))
+    if rc == 0:
+        base_env = {k: v for k, v in os.environ.items() if not k.lower().startswith("npm_config_") and k not in ("NODE_AUTH_TOKEN", "NPM_TOKEN")}
+        pinned_env = dict(base_env, **pinned, TAG=tag)
+        CLEAN = "No other npm configuration is in effect"
+
+        def clean(label, extra, expect_ok):
+            script = step(workflow, "npm", CLEAN)["run"]
+            proc = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script], cwd=work, env=dict(pinned_env, **extra), capture_output=True, text=True)
+            ok = (proc.returncode == 0) == expect_ok
+            check(ok, f"npm configuration check {'passes' if expect_ok else 'refuses'}: {label}" + ("" if ok else f"\n{proc.stdout}{proc.stderr}"))
+
+        clean("only the pinned configuration", {}, True)
+        clean("another npm_config variable", {"NPM_CONFIG_PREFIX": "/tmp/x"}, False)
+        clean("a lower-case npm_config variable", {"npm_config_cache": "/tmp/x"}, False)
+        clean("another registry", {"NPM_CONFIG_REGISTRY": "https://evil.example/"}, False)
+        clean("a NODE_AUTH_TOKEN", {"NODE_AUTH_TOKEN": "x"}, False)
+        clean("an NPM_TOKEN", {"NPM_TOKEN": "x"}, False)
+
+    # package.json private: true is the default; false only when CHANGELOG.md has the section of this version (QA, Crivo)
+    def private_case(label, private, changelog_heading, expect_ok):
+        tree = os.path.join(work, "tree")
+        if os.path.exists(tree):
+            shutil.rmtree(tree)
+        for rel in ("package.json", "server.json", "README.md", "LICENSE", os.path.join("mcpb", "manifest.json"), os.path.join("dist", "mothdex-mcp.mjs"),
+                    os.path.join("scripts", "check-package.mjs")):
+            os.makedirs(os.path.dirname(os.path.join(tree, rel)), exist_ok=True)
+            shutil.copy(os.path.join(ROOT, rel), os.path.join(tree, rel))
+        with open(os.path.join(tree, "package.json"), encoding="utf-8") as f:
+            pj = json.load(f)
+        pj["private"] = private
+        with open(os.path.join(tree, "package.json"), "w", encoding="utf-8") as f:
+            json.dump(pj, f)
+        with open(os.path.join(tree, "CHANGELOG.md"), "w", encoding="utf-8") as f:
+            f.write("# Changelog\n\n## [Unreleased]\n" + (f"\n## [{version}] - 2026-12-01\n" if changelog_heading else ""))
+        proc = subprocess.run(["node", os.path.join(tree, "scripts", "check-package.mjs")], cwd=tree, capture_output=True, text=True)
+        ok = (proc.returncode == 0) == expect_ok
+        check(ok, f"check-package {'accepts' if expect_ok else 'refuses'}: {label}" + ("" if ok else f"\n{proc.stdout}{proc.stderr}"))
+
+    private_case("private true", True, False, True)
+    private_case("private false with the version in the changelog (the release PR)", False, True, True)
+    private_case("private false without the version in the changelog", False, False, False)
 
     if with_publisher:
         with open(os.path.join(release, "checksums.txt"), "w", encoding="utf-8") as f:
