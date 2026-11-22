@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -22618,11 +22619,28 @@ var package_default = {
   version: "0.1.0",
   private: true,
   description: "MCP server for the Mothdex API",
+  mcpName: "io.github.Or4cu1o/mothdex-mcp",
   license: "GPL-3.0-only",
+  homepage: "https://github.com/Or4cu1o/mothdex-mcp#readme",
+  bugs: {
+    url: "https://github.com/Or4cu1o/mothdex-mcp/issues"
+  },
   type: "module",
+  bin: {
+    "mothdex-mcp": "dist/mothdex-mcp.mjs"
+  },
+  files: [
+    "dist/mothdex-mcp.mjs",
+    "README.md",
+    "LICENSE"
+  ],
   repository: {
     type: "git",
     url: "git+https://github.com/Or4cu1o/mothdex-mcp.git"
+  },
+  publishConfig: {
+    access: "public",
+    provenance: true
   },
   packageManager: "pnpm@12.15.0+sha512.b3951d6d6ff4a9f13dc7cf56cd28d2b8eb37dbcc9c68e52e1e1191873ea9f82a017287ab50baadc5ccc494f036c67c0e47eb13608c2fa36f47711b61ea128e61",
   engines: {
@@ -22635,18 +22653,17 @@ var package_default = {
     test: "vitest run --passWithNoTests",
     build: "node scripts/build.mjs",
     "check:fixtures": "node scripts/check-fixtures.mjs",
-    smoke: "node scripts/smoke-stdio.mjs"
+    smoke: "node scripts/smoke-stdio.mjs",
+    "check:package": "node scripts/check-package.mjs"
   },
   devDependencies: {
     "@biomejs/biome": "2.6.7",
     "@modelcontextprotocol/client": "2.4.0",
+    "@modelcontextprotocol/server": "2.4.0",
     "@types/node": "26.6.6",
     esbuild: "0.28.2",
     typescript: "7.0.2",
-    vitest: "5.1.0"
-  },
-  dependencies: {
-    "@modelcontextprotocol/server": "2.4.0",
+    vitest: "5.1.0",
     zod: "4.6.7"
   }
 };

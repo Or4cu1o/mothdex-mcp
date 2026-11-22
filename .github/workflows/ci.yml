@@ -80,6 +80,8 @@ jobs:
             echo "dist/ is not the build of src: run 'pnpm build' and commit dist/mothdex-mcp.mjs" >&2
             exit 1
           fi
+      - name: The npm package is what plugin.md 5.2 allows
+        run: pnpm check:package
 
   # Lints the workflows with a pinned actionlint image (digest), no network needed once pulled.
   actionlint:
