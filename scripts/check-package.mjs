@@ -33,6 +33,8 @@ const LIFECYCLE = [
   "install",
   "postinstall",
   "prepare",
+  "preprepare",
+  "postprepare",
   "prepublish",
   "prepublishOnly",
   "prepack",
@@ -76,11 +78,14 @@ const packed = JSON.parse(
 const have = packed.files.map((f) => f.path).sort();
 if (JSON.stringify(have) !== JSON.stringify(WANT))
   problems.push(`npm pack lists ${JSON.stringify(have)}, want ${JSON.stringify(WANT)}`);
-console.log(
-  `dist sha256 ${createHash("sha256")
-    .update(readFileSync(new URL("../dist/mothdex-mcp.mjs", import.meta.url)))
-    .digest("hex")}`,
-);
+// The bundle starts as a program and answers --version (the smoke test covers the protocol).
+const distPath = fileURLToPath(new URL("../dist/mothdex-mcp.mjs", import.meta.url));
+const printed = execFileSync(process.execPath, [distPath, "--version"], {
+  encoding: "utf8",
+}).trim();
+if (printed !== `mothdex-mcp ${pkg.version}`)
+  problems.push(`dist --version printed "${printed}", want "mothdex-mcp ${pkg.version}"`);
+console.log(`dist sha256 ${createHash("sha256").update(dist).digest("hex")}`);
 
 if (problems.length > 0) {
   for (const p of problems) console.error(p);

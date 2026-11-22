@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- T-66: distribution metadata for v0.2.0, preparation only (nothing is published). `package.json` gets `mcpName`, `bin`, `files`
+- T-66: distribution metadata for the next release, preparation only (nothing is published). `package.json` gets `mcpName`, `bin`, `files`
   (`dist/mothdex-mcp.mjs`, `README.md`, `LICENSE`) and `publishConfig` (public, provenance); `@modelcontextprotocol/server` and
   `zod` move to `devDependencies` because the bundle is self-contained; the package stays `private: true` until the release PR.
   New `server.json` (MCP registry) and `mcpb/manifest.json` (spec 0.3), both with no default for the download folder.
