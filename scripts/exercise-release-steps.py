@@ -302,7 +302,7 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
         tree = os.path.join(work, "tree")
         if os.path.exists(tree):
             shutil.rmtree(tree)
-        for rel in ("package.json", "server.json", "README.md", "LICENSE", os.path.join("mcpb", "manifest.json"), os.path.join("dist", "mothdex-mcp.mjs"),
+        for rel in ("package.json", "server.json", "README.md", "LICENSE", os.path.join("mcpb", "manifest.json"), os.path.join("mcpb", "icon.png"), os.path.join("dist", "mothdex-mcp.mjs"),
                     os.path.join("scripts", "check-package.mjs")):
             os.makedirs(os.path.dirname(os.path.join(tree, rel)), exist_ok=True)
             shutil.copy(os.path.join(ROOT, rel), os.path.join(tree, rel))

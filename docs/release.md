@@ -6,9 +6,9 @@ The release is a tag. Nothing here runs until the owner creates a `v*` tag; no w
 
 - `mothdex-mcp_<version>.mjs`: the single-file server bundle. Byte for byte the same as the committed
   `dist/mothdex-mcp.mjs` at the tag (the build job fails otherwise).
-- `mothdex-mcp_<version>.mcpb`: the MCP Bundle for clients that install `.mcpb` files. It holds exactly two files, the
-  `manifest.json` (`mcpb/manifest.json`) and `dist/mothdex-mcp.mjs`, both byte for byte the committed ones. There is no icon
-  yet (backlog `mcpb-icon`, after the brand session); the list check in `scripts/pack-mcpb.sh` says so and changes when it lands.
+- `mothdex-mcp_<version>.mcpb`: the MCP Bundle for clients that install `.mcpb` files. It holds exactly three files, the
+  `manifest.json` (`mcpb/manifest.json`), `icon.png` (`mcpb/icon.png`, the 512x512 project-owned art approved in D30) and
+  `dist/mothdex-mcp.mjs`, all three byte for byte the committed ones; the exact-list check is in `scripts/pack-mcpb.sh`.
   The container is **not reproducible**: `mcpb pack` stamps the time of packing in the zip, so two packs of the same files differ. Integrity rests on
   the attestation of the packed file and on the byte-for-byte check of its two members against the committed files.
 - `mothdex-mcp-<version>.tgz`: the npm tarball, made once in the build job (`npm pack --ignore-scripts`) and published to npm by the
