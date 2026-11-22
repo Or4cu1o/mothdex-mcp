@@ -97,6 +97,26 @@ def edit_package_json(**changes):
 
 
 workflow = load_workflow()
+
+# QA: the structure the threat model fixes (MP-1, MP-2, MP-3, MP-9, MP-6): environments, permissions, no checkout, no secret.
+STRUCTURE = {
+    "npm": {"environment": "release", "permissions": {"contents": "read", "attestations": "read", "id-token": "write"}},
+    "registry": {"environment": "mcp-registry", "permissions": {"contents": "read", "attestations": "read", "id-token": "write"}},
+}
+for job_name, want in STRUCTURE.items():
+    job = workflow["jobs"][job_name]
+    check(job.get("environment") == want["environment"], f"job {job_name} runs in environment {want['environment']}")
+    check(job.get("permissions") == want["permissions"], f"job {job_name} has exactly the permissions {want['permissions']}")
+    uses = [x.get("uses", "") for x in job["steps"]]
+    check(not any(u.startswith("actions/checkout") for u in uses), f"job {job_name} has no checkout")
+    check(all(("@" in u and len(u.split("@")[1].split()[0]) == 40) for u in uses if u), f"job {job_name}: every action is pinned by a full SHA")
+    token_envs = [k for x in job["steps"] for k in (x.get("env") or {}) if k in ("NODE_AUTH_TOKEN", "NPM_TOKEN")]
+    check("secrets." not in json.dumps(job) and not token_envs, f"job {job_name} reads no secret and sets no npm token")
+check(workflow["jobs"]["npm"]["needs"] == ["build", "attest", "publish"], "npm needs build, attest and publish")
+check(workflow["jobs"]["registry"]["needs"] == ["build", "attest", "publish", "npm"], "registry needs the npm job too")
+check(workflow["jobs"]["npm"]["environment"] != workflow["jobs"]["registry"]["environment"], "the two publishing jobs use different environments")
+node_step = next(x for x in workflow["jobs"]["npm"]["steps"] if str(x.get("uses", "")).startswith("actions/setup-node"))
+check(str(node_step["with"]["node-version"]) == "26.13.1", "the npm job pins Node 26.13.1")
 with open(os.path.join(ROOT, "package.json"), encoding="utf-8") as f:
     version = json.load(f)["version"]
 tag = f"v{version}"
