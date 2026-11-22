@@ -82,6 +82,10 @@ jobs:
           fi
       - name: The npm package is what plugin.md 5.2 allows
         run: pnpm check:package
+      - name: Install the pinned mcpb CLI (own lockfile, frozen, no install scripts)
+        run: pnpm --dir tools/mcpb install --frozen-lockfile --ignore-scripts
+      - name: The .mcpb packs, validates and holds exactly the manifest and the bundle
+        run: scripts/pack-mcpb.sh "$RUNNER_TEMP/mcpb"
 
   # Lints the workflows with a pinned actionlint image (digest), no network needed once pulled.
   actionlint:

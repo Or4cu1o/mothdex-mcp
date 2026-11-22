@@ -1,0 +1,8 @@
+{
+  "name": "mothdex-mcp-tools-mcpb",
+  "private": true,
+  "description": "Release tooling only: the pinned mcpb CLI that packs and validates the .mcpb. Never published, never bundled.",
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2"
+  }
+}

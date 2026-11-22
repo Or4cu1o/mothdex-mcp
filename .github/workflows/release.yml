@@ -2,6 +2,9 @@ name: Release
 
 # Runs only for version tags. Three jobs with separate permissions:
 # build (read-only repo) -> attest (OIDC + attestations) -> publish (the only job that can write contents).
+# The release files are the single-file bundle and the .mcpb that wraps it; both are listed in checksums.txt, so the
+# attestation of checksums.txt's subjects covers both, and publish verifies and uploads exactly that set.
+# Publishing to npm and to the MCP registry is NOT done here: it is designed in docs/release.md and not implemented.
 # No dependency cache is used anywhere in this workflow (T-4 audit), and dependencies install with the frozen
 # lockfile and no install scripts. Owner-side settings it relies on (environment `release` with required
 # reviewers, tag ruleset for v*) and the release steps are in docs/release.md.
@@ -61,13 +64,20 @@ jobs:
             exit 1
           fi
       - run: pnpm smoke
+      - name: The npm package is what plugin.md 5.2 allows
+        run: pnpm check:package
+      - name: Install the pinned mcpb CLI (own lockfile, frozen, no install scripts)
+        run: pnpm --dir tools/mcpb install --frozen-lockfile --ignore-scripts
       - name: Stage the release files and checksums
         env:
           TAG: ${{ github.ref_name }}
         run: |
           mkdir release
           cp dist/mothdex-mcp.mjs "release/mothdex-mcp_${TAG#v}.mjs"
-          (cd release && sha256sum "mothdex-mcp_${TAG#v}.mjs" > checksums.txt)
+          # validates the manifest, packs, lists the members (exactly two), compares them with the committed files and
+          # smokes the bundle inside the archive; the version in the file name is package.json's, which equals the tag
+          scripts/pack-mcpb.sh release
+          (cd release && sha256sum "mothdex-mcp_${TAG#v}.mjs" "mothdex-mcp_${TAG#v}.mcpb" > checksums.txt)
           cat release/checksums.txt
       - name: Smoke the staged release file
         env:
@@ -162,4 +172,4 @@ jobs:
           flags=""
           case "$TAG" in *-*) flags="--prerelease" ;; esac
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes $flags \
-            "mothdex-mcp_${TAG#v}.mjs" checksums.txt
+            "mothdex-mcp_${TAG#v}.mjs" "mothdex-mcp_${TAG#v}.mcpb" checksums.txt
