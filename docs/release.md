@@ -9,6 +9,8 @@ The release is a tag. Nothing here runs until the owner creates a `v*` tag; no w
 - `mothdex-mcp_<version>.mcpb`: the MCP Bundle for clients that install `.mcpb` files. It holds exactly two files, the
   `manifest.json` (`mcpb/manifest.json`) and `dist/mothdex-mcp.mjs`, both byte for byte the committed ones. There is no icon
   yet (backlog `mcpb-icon`, after the brand session); the list check in `scripts/pack-mcpb.sh` says so and changes when it lands.
+  The container is **not reproducible**: `mcpb pack` stamps the time of packing in the zip, so two packs of the same files differ. Integrity rests on
+  the attestation of the packed file and on the byte-for-byte check of its two members against the committed files.
 - `checksums.txt` (SHA-256 of both files), and a GitHub build-provenance attestation for each of them and for `checksums.txt`.
 
 ## How the pipeline works

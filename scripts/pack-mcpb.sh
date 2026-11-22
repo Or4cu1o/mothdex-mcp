@@ -2,7 +2,8 @@
 # Packs the .mcpb (MCP Bundle) of the committed bundle with the pinned mcpb CLI of tools/mcpb, and checks the result.
 # Used by the release build and by CI on every pull request, so the first tag does not meet it for the first time.
 #
-#   scripts/pack-mcpb.sh <out-dir>      writes <out-dir>/mothdex-mcp_<version>.mcpb (the version of package.json)
+#   scripts/pack-mcpb.sh <out-dir>      writes <out-dir>/mothdex-mcp_<version>.mcpb (the version of package.json);
+#                                       a relative <out-dir> is relative to the repository root, not to the caller
 #
 # Run after `pnpm build` and after `pnpm --dir tools/mcpb install --frozen-lockfile --ignore-scripts`.
 # Nothing is published and nothing is signed here.
@@ -19,6 +20,15 @@ mkdir -p "$1"
 out=$(cd "$1" && pwd)
 version=$(node -p "require('./package.json').version")
 file="$out/mothdex-mcp_${version}.mcpb"
+
+# The tool is the one the repository pins: the installed version equals the exact devDependencies value, and the only pnpm
+# trust exception of tools/mcpb is the reviewed undici-types@6.21.0 (nothing else may be added without this check failing).
+installed=$(node -p "require('./tools/mcpb/node_modules/@anthropic-ai/mcpb/package.json').version")
+pinned=$(node -p "require('./tools/mcpb/package.json').devDependencies['@anthropic-ai/mcpb']")
+[ "$installed" = "$pinned" ] || fail "the installed mcpb is $installed, tools/mcpb/package.json pins $pinned"
+excluded=$(awk '/^trustPolicyExclude:/ { f = 1; next } f && /^[[:space:]]+-[[:space:]]/ { sub(/^[[:space:]]+-[[:space:]]+/, ""); print; next } f { exit }' tools/mcpb/pnpm-workspace.yaml)
+[ "$excluded" = "undici-types@6.21.0" ] || fail "trustPolicyExclude in tools/mcpb/pnpm-workspace.yaml is not exactly undici-types@6.21.0: $excluded"
+grep -qx 'trustPolicy: no-downgrade' tools/mcpb/pnpm-workspace.yaml || fail "tools/mcpb/pnpm-workspace.yaml must keep trustPolicy: no-downgrade"
 
 # `pnpm --dir tools/mcpb exec` runs in tools/mcpb, so every path given to it is absolute.
 mcpb() { pnpm --dir tools/mcpb exec mcpb "$@"; }
