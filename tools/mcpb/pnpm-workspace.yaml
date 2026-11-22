@@ -1,0 +1,23 @@
+# Release tooling only (never shipped): the same supply-chain policy as the root, with ONE exception, reviewed on its own:
+# undici-types@6.21.0 is a types-only package (no code runs) that @anthropic-ai/mcpb pulls in through @types/node, and
+# pnpm's trust policy flags it as a trust downgrade: versions 6.13.0 to 6.19.2 carry npm provenance attestations, 6.19.4 to
+# 6.21.0 do not. Added 2026-11-22 (T-82), approved by the owner (D30 (1)); installed with --frozen-lockfile and --ignore-scripts.
+engineStrict: true
+strictDepBuilds: true
+minimumReleaseAge: 10080
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  - undici-types@6.21.0
+# The audit job (CI) runs `pnpm audit --audit-level high` on this project too. Exactly these three advisories are accepted,
+# each with its reason; any new advisory fails the job. Nothing here ships and the job is read-only.
+auditConfig:
+  ignoreGhsas:
+    # tmp (path traversal), reached only through mcpb > @inquirer/editor > external-editor: the interactive editor prompt of
+    # `mcpb init`, which pack and validate never use.
+    - GHSA-ph9p-34f9-6g65
+    # tmp (low), the same path and the same reason.
+    - GHSA-52f5-9888-hmc6
+    # zod (memory exhaustion on oversized constrained collections), mcpb > zod 3.25.76: it validates only our own committed
+    # manifest, never untrusted input.
+    - GHSA-mrhx-c7xc-m3w5
