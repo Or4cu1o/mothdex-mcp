@@ -23067,7 +23067,7 @@ function readInfo(raw) {
   if (raw === void 0 || raw === null) return { error: "", message: "" };
   if (!isRecord(raw)) return void 0;
   const { error: error2 = "", message } = raw;
-  if (typeof error2 !== "string") return void 0;
+  if (typeof error2 !== "string" || "error" in raw && error2 === "") return void 0;
   return { error: error2, message: typeof message === "string" ? message : "" };
 }
 var codeOf = (info) => info !== void 0 && isErrorCode(info.error) ? info.error : "";

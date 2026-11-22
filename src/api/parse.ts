@@ -71,12 +71,13 @@ function tryParseJson(text: string): unknown {
   }
 }
 
-/** An absent or null `info` is "no error". `info.error` must be a string and `info.message` is text or ignored; `info.code` is ignored. */
+/** An absent or null `info` is "no error". `info.error`, when present, must be a non-empty string and `info.message` is text or ignored; `info.code` is ignored. */
 function readInfo(raw: unknown): ApiInfo | undefined {
   if (raw === undefined || raw === null) return { error: "", message: "" };
   if (!isRecord(raw)) return undefined;
   const { error = "", message } = raw;
-  if (typeof error !== "string") return undefined;
+  // api-client 3.1: a present `error` that is not a non-empty string is not an API v1 answer (decode).
+  if (typeof error !== "string" || ("error" in raw && error === "")) return undefined;
   return { error, message: typeof message === "string" ? message : "" };
 }
 

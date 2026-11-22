@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MothdexError } from "./errors";
-import { makeClient } from "./test-helpers";
+import { fixture, makeClient } from "./test-helpers";
 
 const reply = (
   info: unknown,
@@ -87,8 +87,10 @@ describe("upstream error codes (HTTP 200, info.error is a code)", () => {
       reply({ error: "ENTRY_NOT_FOUND", message: "m", code: "database_error" }),
     ]);
     expect((await fail(client.entry("doom-1993-dos"))).kind).toBe("not_found");
-    const { client: other } = makeClient([reply({ error: "", code: "entry_not_found" })]);
-    await expect(other.info()).rejects.toMatchObject({ kind: "decode" }); // no error and an empty data: not an API v1 answer
+    const { client: other } = makeClient([
+      { body: fixture("info.json").replace('"info":{}', '"info":{"code":"ENTRY_NOT_FOUND"}') },
+    ]);
+    await expect(other.info()).resolves.toMatchObject({ totalEntries: expect.any(Number) }); // info.code alone is ignored
   });
 
   it("the message is cleaned and capped at 512 bytes, and the code is never taken from the message", async () => {
@@ -103,8 +105,10 @@ describe("upstream error codes (HTTP 200, info.error is a code)", () => {
     expect((await fail(second.entry("doom-1993-dos"))).kind).toBe("invalid_request");
   });
 
-  it("info.error that is not a string is api_incompatible (decode)", async () => {
-    for (const info of [{ error: 7 }, { error: { x: 1 } }, { error: null }]) {
+  it("info.error present but not a non-empty string is api_incompatible (decode); absent is success", async () => {
+    const valid = JSON.stringify({ info: { error: "" }, data: {} });
+    expect((await fail(makeClient([{ body: valid }]).client.info())).kind).toBe("decode");
+    for (const info of [{ error: 7 }, { error: { x: 1 } }, { error: null }, { error: "" }]) {
       const { client } = makeClient([reply(info)]);
       expect((await fail(client.info())).kind).toBe("decode");
     }
