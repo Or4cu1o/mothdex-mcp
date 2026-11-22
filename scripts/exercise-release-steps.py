@@ -334,7 +334,7 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
             f.write("#!/bin/bash\n" + body)
         os.chmod(path, 0o755)
 
-    write_shim("npm", 'echo "npm $*" >> "$FAKE_LOG"\ncase "$1" in view) printf "%s" "${FAKE_NPM_VIEW-}"; exit "${FAKE_NPM_VIEW_RC:-0}" ;; esac\nexit 0\n')
+    write_shim("npm", 'echo "npm $*" >> "$FAKE_LOG"\ncase "$1" in view) printf "%s" "${FAKE_NPM_VIEW-}"; printf "%s" "${FAKE_NPM_VIEW_ERR-}" >&2; exit "${FAKE_NPM_VIEW_RC:-0}" ;; esac\nexit 0\n')
     write_shim("curl", 'echo "curl $*" >> "$FAKE_LOG"\nout=""; while [ $# -gt 0 ]; do case "$1" in -o) out=$2; shift ;; esac; shift; done\n'
                '[ -n "$out" ] && printf "%s" "${FAKE_CURL_BODY-}" > "$out"; printf "%s" "${FAKE_CURL_CODE:-000}"\n')
     PUBLISH = "Publish the verified tarball (no repack, no retry)"
@@ -342,7 +342,7 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
     os.makedirs(os.path.join(pubdir, "release"))
     pub_tgz = os.path.join(pubdir, "release", f"mothdex-mcp-{version}.tgz")
 
-    def publish_case(label, view_out, view_rc, expect_rc_ok, expect_publish, tamper=False):
+    def publish_case(label, view_out, view_rc, expect_rc_ok, expect_publish, tamper=False, view_err=""):
         shutil.copy(good, pub_tgz)
         with open(os.path.join(pubdir, "release", "checksums.txt"), "w", encoding="utf-8") as f:
             f.write(subprocess.run(["sha256sum", os.path.basename(pub_tgz)], cwd=os.path.dirname(pub_tgz), capture_output=True, text=True).stdout)
@@ -351,7 +351,7 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
                 f.write(b"x")
         log = os.path.join(work, "fake.log")
         open(log, "w", encoding="utf-8").close()
-        penv = dict(env, PATH=shims + os.pathsep + os.environ["PATH"], FAKE_LOG=log, FAKE_NPM_VIEW=view_out, FAKE_NPM_VIEW_RC=str(view_rc))
+        penv = dict(env, PATH=shims + os.pathsep + os.environ["PATH"], FAKE_LOG=log, FAKE_NPM_VIEW=view_out, FAKE_NPM_VIEW_ERR=view_err, FAKE_NPM_VIEW_RC=str(view_rc))
         rc3, out3 = run_step(workflow, "npm", PUBLISH, pubdir, penv)
         calls = open(log, encoding="utf-8").read().splitlines()
         published = [c for c in calls if c.startswith("npm publish")]
@@ -367,6 +367,18 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
     publish_case("another error (E401): stopped, nothing published", "npm error code E401", 1, False, False)
     publish_case("another version in the answer: stopped, nothing published", "0.0.9", 0, False, False)
     publish_case("the tarball changed after verification: stopped before npm is asked", "", 0, False, False, tamper=True)
+    # the stderr branch (Crivo S1): stdout alone says the version exists, stderr alone tells "not found" from a real error
+    NOTICE = "npm notice New major version of npm available! 10.0.0 -> 99.0.0\n"
+    publish_case("E404 only on stderr: published once", "", 1, True, True, view_err="npm error code E404\nnpm error 404 Not Found\n")
+    publish_case("E404 on stderr after a notice: published once", "", 1, True, True, view_err=NOTICE + "npm error code E404\n")
+    publish_case("a network error only on stderr: stopped, nothing published", "", 1, False, False, view_err="npm error code ENOTFOUND\nnpm error network request failed\n")
+    publish_case("E401 only on stderr: stopped, nothing published", "", 1, False, False, view_err="npm error code E401\nnpm error Unable to authenticate\n")
+    publish_case("E403 only on stderr: stopped, nothing published", "", 1, False, False, view_err="npm error code E403\n")
+    publish_case("the version on stdout and a notice on stderr: already published, nothing published", version, 0, True, False, view_err=NOTICE)
+    publish_case("the version on stdout, a failing status and an error on stderr: already published", version, 1, True, False, view_err="npm error code E500\n")
+    publish_case("empty stdout and only an npm notice on stderr: published once", "", 0, True, True, view_err=NOTICE)
+    publish_case("empty stdout and an npm warning on stderr: published once", "", 0, True, True, view_err="npm warn config something deprecated\n")
+    publish_case("another version on stdout and a notice on stderr: stopped, nothing published", "0.0.9", 0, False, False, view_err=NOTICE)
 
     # the registry read: a state step that never sends the version twice and never overwrites a different .mcpb
     shutil.copy(os.path.join(ROOT, "server.json"), os.path.join(release, "server.json"))
