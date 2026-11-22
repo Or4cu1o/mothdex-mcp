@@ -5,7 +5,7 @@
   "plugins": [
     {
       "name": "mothdex",
-      "source": "./",
+      "source": { "source": "github", "repo": "Or4cu1o/mothdex-mcp", "ref": "v0.1.0", "sha": "468121cd380081d3e3126a3e59956fd98034510b" },
       "description": "Search the Mothdex game catalog and resolve download links"
     }
   ]
