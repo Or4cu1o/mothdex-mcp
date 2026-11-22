@@ -189,17 +189,19 @@ The order is fixed, and each step verifies the previous one's hash:
 1. **`build`:**
    - the bundle, as today;
    - the `.mcpb` packed from the committed dist with a pinned `@anthropic-ai/mcpb`: exact version, installed with `--ignore-scripts`, never `npx` latest;
-   - `unzip -l` must list exactly `manifest.json`, `dist/mothdex-mcp.mjs` and the icon;
+   - `unzip -l` must list exactly `manifest.json` and `dist/mothdex-mcp.mjs`, both byte for byte the committed files (`scripts/pack-mcpb.sh`). The icon joins this list when it exists (backlog `mcpb-icon`); `mcpb validate` accepts a manifest without one;
    - `mcpb validate` passes;
    - the `.mcpb` goes into `checksums.txt`.
 2. **`attest`:** provenance for the `.mjs`, the `.mcpb` and `checksums.txt`.
 3. **GitHub release:** assets plus attestations, as today.
 4. **npm, trusted publishing (OIDC):**
-   - `id-token: write` on this job only, npm ≥ 11.5.1, Node ≥ 22.14.0 (F10);
+   - `id-token: write` only on `attest` (no environment), on this job (environment `release`) and on `registry` (its own environment `mcp-registry`, which npm does not trust): [T-82 threat model](../../security/T-82-threat-model-mcp-publish.md) MP-1 and MP-2. npm ≥ 11.5.1, Node ≥ 22.14.0 (F10);
    - `npm publish` of the verified tarball; provenance is automatic;
    - **no `NPM_TOKEN` or any long-lived npm secret** in the repo or org;
    - afterwards, `npm view <npm-name>@<version> dist.integrity` and `npm audit signatures`.
-5. **Registry:** `server.json` published with a pinned `mcp-publisher` whose Sigstore bundle is verified before use, after `mcp-publisher login github-oidc`.
+5. **Registry:** `server.json` published with a pinned `mcp-publisher`, after `mcp-publisher login github-oidc`, in environment `mcp-registry`. The binary's pinned SHA-256 is checked before `chmod +x`. A Sigstore bundle or GitHub attestation is verified with the pinned signer identity when upstream publishes one; otherwise the pinned hash is the only check, and docs/release.md says so (T-82 MP-8).
+
+The publishing jobs (`npm`, `registry`) and their checks follow T-82 MP-1 to MP-13, as designed in docs/release.md "Planned: publishing to npm and to the MCP registry". Where the two differ, the threat model wins.
 6. **Marketplace pin PR** (§1, docs/release.md step 3).
 
 `.mcpb` signing:
