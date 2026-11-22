@@ -5,7 +5,7 @@ conflict on the changelog. The person who prepares a release folds the fragments
 
 ## Writing a fragment
 
-Create `changes/<branch-name>.md` (lower-case letters, digits, `.`, `_` and `-` only; the branch name is a good choice
+Create `changes/<branch-name>.md` (lower-case letters, digits, `.`, `_` and `-` only, ending in `.md`; the branch name is a good choice
 because it is unique among open pull requests). The file has one or more sections, each a `###` heading followed by the
 entries as you would write them in the changelog:
 
@@ -34,6 +34,7 @@ scripts/changelog-fold.sh                  # add the fragments to the [Unrelease
 scripts/changelog-fold.sh --release 0.2.0  # the same, then [Unreleased] becomes [0.2.0] - <today>, with a fresh empty [Unreleased]
 ```
 
-The script only adds text in front of the existing content of `CHANGELOG.md` (grouped by section, fragments in file name
-order); it never rewrites what is already there, so a section heading may appear twice in `[Unreleased]` until the
-release is cut. Review the result, then commit it in the release pull request.
+The entries go under the first existing `### <Section>` heading of `[Unreleased]`; a section with no heading there gets a new
+one at the top. The rest of `CHANGELOG.md` is not rewritten, and the script refuses to cut a release that already exists or an
+empty one. Everything in `changes/` other than this file must be a fragment (a hidden file, another extension, a folder, a link
+or an empty file is an error, not skipped). Review the result, then commit it in the release pull request.
