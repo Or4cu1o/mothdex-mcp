@@ -179,6 +179,7 @@ For **phase A** (already in the pull request): accept or refuse the single pnpm 
 `tools/mcpb/pnpm-workspace.yaml`; nothing else, no new required check name.
 
 For **phase B**, in this order, only when the owner decides to publish:
+
 1. An npm account (owner identity, two-factor authentication on, `auth-and-writes`) and the name `mothdex-mcp` free (D28 6b).
 2. The first publish of the name, by the owner, by hand and with a short-lived granular token that is revoked right after
    (T-60 SC-01); then, on the package page, a **trusted publisher**: repository `Or4cu1o/mothdex-mcp`, workflow `release.yml`,
