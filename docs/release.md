@@ -54,7 +54,7 @@ that path (the attestation is looked up by the file's digest, not its name).
 ## Release steps (owner OK needed for steps 2 and 3)
 
 1. **Prepare** (PR): bump `version` in `package.json` and `.claude-plugin/plugin.json` (`node scripts/check-versions.mjs`),
-   move the CHANGELOG entries under the version, `pnpm build`, commit `dist/mothdex-mcp.mjs`, merge. Check the plugin
+   run `scripts/changelog-fold.sh --release <version>` (folds the `changes/` fragments into `CHANGELOG.md` and moves the entries under the version), `pnpm build`, commit `dist/mothdex-mcp.mjs`, merge. Check the plugin
    against the working tree with `claude --plugin-dir .` (not `marketplace add ./`: after the first pin that entry
    points at an older tag).
 2. **Tag** `vX.Y.Z` on that `main` commit. The workflow builds, attests and (after approval of the `release`
@@ -82,7 +82,7 @@ Prepared at main `bf994da`. **OWNER OK** marks a settings change, the tag or a p
    for `v*` (creation only by the owner or the bot, update and deletion blocked); `dist == build(src)` as a required check
    on `main`; recommended, immutable releases.
 3. **Prepare PR:** `package.json` and `.claude-plugin/plugin.json` are already `0.1.0`
-   (`node scripts/check-versions.mjs`); move the CHANGELOG `[Unreleased]` entries under `## [0.1.0] - <date>`;
+   (`node scripts/check-versions.mjs`); run `scripts/changelog-fold.sh --release 0.1.0` (folds the `changes/` fragments and moves the `[Unreleased]` entries under `## [0.1.0] - <date>`);
    `pnpm build` must leave `dist/mothdex-mcp.mjs` unchanged; check the plugin with `claude --plugin-dir .`. Merge, note the
    full SHA of the merge commit (`git rev-parse origin/main`).
 4. **Tag (OWNER OK):** `git tag -a v0.1.0 -m "mothdex-mcp v0.1.0" <sha> && git push origin v0.1.0` (never `--force`).

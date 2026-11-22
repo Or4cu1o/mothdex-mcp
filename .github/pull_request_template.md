@@ -11,7 +11,7 @@
 ## Checklist
 
 - [ ] Branch is named `type/short-name`; commits follow Conventional Commits
-- [ ] `CHANGELOG.md` has an entry under `Unreleased`
+- [ ] A changelog fragment `changes/<branch>.md` is added (not an edit of `CHANGELOG.md`), or this PR needs no entry
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` pass locally
 - [ ] No secrets, tokens or `.env` files in the diff
 - [ ] README/docs updated if behavior or structure changed
