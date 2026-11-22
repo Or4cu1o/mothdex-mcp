@@ -8,7 +8,7 @@ import * as fs from "node:fs";
 import * as https from "node:https";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { toToolError } from "../errors";
 import { DestinationRejected, denyReason, systemContext, validateDestination } from "./destination";
 import { realFs } from "./fs-seam";
@@ -25,8 +25,10 @@ const rig = (options?: RigOptions): Rig => {
   rigs.push(made);
   return made;
 };
+const tmps: string[] = [];
 afterEach(() => {
   for (const made of rigs.splice(0)) made.cleanup();
+  for (const base of tmps.splice(0)) fs.rmSync(base, { recursive: true, force: true });
 });
 
 const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
@@ -41,8 +43,11 @@ const failure = async (call: Promise<unknown>): Promise<string> => {
 };
 /** The placeholder a client leaves in place when the plugin setting is empty. */
 const PLACEHOLDER = ["$", "{user_config.download_dir}"].join("");
-const tmp = (): string =>
-  fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "mothdex-dst-")));
+const tmp = (): string => {
+  const base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "mothdex-dst-")));
+  tmps.push(base);
+  return base;
+};
 
 describe("happy path and output (cases 37, 20)", () => {
   it("case 37: writes the file and answers exactly {status, path, bytes, sha256, crc}", async () => {
@@ -87,7 +92,10 @@ describe("registration and configuration (cases 1-5)", () => {
     const lines: string[] = [];
     return { warn: (m) => lines.push(m), lines };
   };
+  // Shared by the tests of this block, so it is removed once at the end, not after each test.
   const dir = tmp();
+  tmps.pop();
+  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
   it.each(["", "0", "true", "yes", " 1", "1 "])(
     "case 1: flag %j leaves the tool off with a warning naming the variable",

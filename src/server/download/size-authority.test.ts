@@ -1,5 +1,5 @@
 /** T-27 / T-63: `Content-Length` is the size authority; `link.size` is a preflight estimate (T-60 cases 25, 30, 32, 37, 37b, 37c). */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { MIB, makeRig, type Rig, type RigOptions, rawLink } from "./test-kit";
 
 const rigs: Rig[] = [];
@@ -8,6 +8,9 @@ const rig = (options?: RigOptions): Rig => {
   rigs.push(r);
   return r;
 };
+afterEach(() => {
+  for (const r of rigs.splice(0)) r.cleanup();
+});
 const code = async (call: Promise<unknown>): Promise<string> =>
   call.then(
     () => "no error",

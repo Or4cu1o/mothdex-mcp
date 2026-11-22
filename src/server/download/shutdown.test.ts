@@ -4,12 +4,20 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { buildSync } from "esbuild";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { installShutdownHandlers } from "./shutdown";
 import { DownloadState } from "./state";
 
 const posix = process.platform !== "win32";
-const dir = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "mothdex-sig-"));
+const made: string[] = [];
+afterEach(() => {
+  for (const base of made.splice(0)) fs.rmSync(base, { recursive: true, force: true });
+});
+const dir = (): string => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "mothdex-sig-"));
+  made.push(base);
+  return base;
+};
 
 /** T-60 MT-14 / cases 33-34: a closed stdin or a signal stops the transfer and removes the staging file. */
 describe("shutdown handlers", () => {
