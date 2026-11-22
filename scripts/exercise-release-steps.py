@@ -379,6 +379,9 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
     publish_case("empty stdout and only an npm notice on stderr: published once", "", 0, True, True, view_err=NOTICE)
     publish_case("empty stdout and an npm warning on stderr: published once", "", 0, True, True, view_err="npm warn config something deprecated\n")
     publish_case("another version on stdout and a notice on stderr: stopped, nothing published", "0.0.9", 0, False, False, view_err=NOTICE)
+    publish_case("old-style npm ERR! on stderr with empty stdout: stopped, nothing published", "", 1, False, False, view_err="npm ERR! code ENOTFOUND\nnpm ERR! network request failed\n")
+    publish_case("the version with a suffix on stdout: not taken as published, stopped", f"{version}-rc.1", 0, False, False)
+    publish_case("the version with a suffix on stdout and a notice on stderr: stopped", f"{version}-rc.1", 0, False, False, view_err=NOTICE)
 
     # the registry read: a state step that never sends the version twice and never overwrites a different .mcpb
     shutil.copy(os.path.join(ROOT, "server.json"), os.path.join(release, "server.json"))
