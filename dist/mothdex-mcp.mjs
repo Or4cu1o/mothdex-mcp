@@ -22616,8 +22616,8 @@ function toError(value) {
 // package.json
 var package_default = {
   name: "mothdex-mcp",
-  version: "0.1.0-rc.1",
-  private: true,
+  version: "0.1.0",
+  private: false,
   description: "MCP server for the Mothdex API",
   mcpName: "io.github.Or4cu1o/mothdex-mcp",
   license: "GPL-3.0-only",

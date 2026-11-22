@@ -140,13 +140,14 @@ tag = f"v{version}"
 with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
     release = os.path.join(work, "release")
     os.makedirs(release)
-    # the real tarball of this tree (private: true), and the bundle that is the "attested" release file
+    # the real tarball of this tree, and the bundle that is the "attested" release file
     sh(["npm", "pack", "--ignore-scripts", "--pack-destination", release], ROOT)
     tgz = os.path.join(release, f"mothdex-mcp-{version}.tgz")
     mjs = os.path.join(release, f"mothdex-mcp_{version}.mjs")
     shutil.copy(os.path.join(ROOT, "dist", "mothdex-mcp.mjs"), mjs)
+    # the cases below start from a tarball with private: true whatever this tree has (true before the release PR, false in it)
     original = os.path.join(work, "original.tgz")
-    shutil.copy(tgz, original)
+    repack(tgz, original, edit_package_json(private=True))
     env = {"TAG": tag, "RUNNER_TEMP": work, "GITHUB_PATH": os.path.join(work, "github_path")}
     TARBALL = "The tarball is what was attested, and is publishable (MP-4)"
 
@@ -156,7 +157,7 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
         good_result = (rc == 0) == expect_ok
         check(good_result, f"tarball check {'passes' if expect_ok else 'refuses'}: {label}" + ("" if good_result else f"\n{out}"))
 
-    tarball_case("the real tarball, private is still true", lambda p: shutil.copy(original, p), False)
+    tarball_case("the tarball with private still true", lambda p: shutil.copy(original, p), False)
     good = os.path.join(work, "good.tgz")
     repack(original, good, edit_package_json(private=False))
     tarball_case("private false", lambda p: shutil.copy(good, p), True)
