@@ -129,72 +129,105 @@ the marketplace install from the pinned tag.
 
 ## Planned: publishing to npm and to the MCP registry (design only, not implemented)
 
-Status: **design for the threat model (Sentinela) before any code**. Nothing in this section runs today: `package.json` stays
-`private: true`, no workflow publishes anywhere, there is no npm login and no token. Phase B of T-82 implements it after the
-review. Owner decisions it rests on: D28 6b (the npm package name is the unscoped `mothdex-mcp`), D28 3 (no tag until the planned
-scope is finished), D28 1c (the owner identity, no bot).
+Status: the design that phase B of T-82 codes against, as constrained by Sentinela's threat model (constraints MP-1 to MP-13,
+owner settings O-1 to O-8). Nothing in this section runs today: `package.json` stays `private: true`, no workflow publishes
+anywhere, there is no npm login and no token. Owner decisions it rests on: D28 6b (the npm package name is the unscoped
+`mothdex-mcp`), D28 3 (no tag until the planned scope is finished), D28 1c (the owner identity, no bot).
 
 ### Principles
 
 - The npm tarball and the registry entry are made from the **same attested files** as the GitHub release, never rebuilt in the
-  publishing jobs.
+  publishing jobs. The tarball (`mothdex-mcp-<version>.tgz`, from `npm pack --ignore-scripts` on the clean tree in `build`) is
+  listed in `checksums.txt`, so it is attested like the other files.
 - No long-lived secret: npm publishes by trusted publishing (OIDC), the registry by GitHub OIDC login.
-- Each publishing job has `id-token: write` **only in that job**, the environment `release` (required reviewer), a read-only
-  `contents`, and runs only after `build`, `attest` and `publish` succeeded, on the tag's own commit.
-- The first publish of a name cannot use a trusted publisher (the package must exist first): see the owner list.
+- `id-token: write` appears only on `attest` (no environment), `npm` (environment `release`) and `registry` (its own environment
+  `mcp-registry`). Any job with `id-token` can mint tokens for any audience, so the registry job, which runs a third-party tool, must
+  sit in an environment that npm does not trust (MP-1, MP-2).
+- The two publishing jobs have **no checkout**: they work only on the downloaded artifact in a fresh directory, so a merged
+  `.npmrc` or script cannot reach them (MP-3). Neither gets `contents: write`, `packages` or `attestations: write`, and neither
+  passes `GITHUB_TOKEN` to npm or `mcp-publisher` (MP-9).
+- `release.yml` keeps `on: push: tags: ["v*"]` as its only trigger; `npm` and `registry` need `build`, `attest` and `publish` and repeat
+  the tag-to-commit check of `publish` before any token is used (MP-5).
 
-### Job `npm` (after `publish`)
+### Job `npm` (after `publish`; environment `release`)
 
-1. Download the `release-files` artifact; `sha256sum --check --strict checksums.txt`; `gh attestation verify` for every listed
-   file with the same flags as `publish` (signer workflow, tag, `--source-digest`, no self-hosted runner).
-2. The tarball: `build` already ran `npm pack --ignore-scripts` on the clean tree and listed `mothdex-mcp-<version>.tgz` in
-   `checksums.txt` (so it is attested like the other files). This job checks that `dist/mothdex-mcp.mjs` inside it has the same
-   SHA-256 as the attested `mothdex-mcp_<version>.mjs`, that `package.json` in it says `private: false`, the tag's version and
-   the expected `mcpName`, and that its file list is exactly the four files `scripts/check-package.mjs` allows.
-3. npm CLI **>= 11.5.1** (trusted publishing needs it): install a pinned version from a checksum-verified source, never "latest".
-4. `npm publish ./mothdex-mcp-<version>.tgz --provenance --access public` with no token in the environment; npm exchanges the
-   job's OIDC token for a publish credential. The tarball path is published as it is: no repack.
-5. After publishing: `npm view mothdex-mcp@<version> dist.integrity` must equal the SHA-512 integrity computed from the verified
-   tarball, and in an empty directory `npm install mothdex-mcp@<version> --ignore-scripts` followed by `npm audit signatures`
-   must pass (registry signature and provenance of that exact version).
-6. A failure after step 4 is not retried by publishing again (a version is immutable): the run stops, the owner decides
+1. Download the `release-files` artifact; `sha256sum --check --strict checksums.txt`; `gh attestation verify` for every listed file
+   with the same flags as `publish`; the tag-to-commit check.
+2. Every npm call runs with `NPM_CONFIG_USERCONFIG` and `NPM_CONFIG_GLOBALCONFIG` pointing at an empty file the job creates,
+   `NPM_CONFIG_REGISTRY=https://registry.npmjs.org/` and `--registry https://registry.npmjs.org/`; any other `NPM_CONFIG_*` or
+   `npm_config_*` variable in the environment fails the job (MP-3).
+3. The npm CLI is >= 11.5.1: the npm bundled with an **exact** Node version pinned in the workflow, with `npm --version` asserted
+   equal to the expected `11.x.y`; if that npm is too old, the npm tarball of a pinned version whose SHA-512 integrity is pinned in
+   the repository and checked before extraction, run as `node <dir>/bin/npm-cli.js`. Never `npm install -g npm@latest`, never `npx`
+   (MP-6).
+4. Inside the tarball (read with `tar`, never extracted into a path npm reads): `private: false`, the tag's version, the expected
+   `mcpName` and `bin`, no lifecycle `scripts`, no `dependencies`, `optionalDependencies`, `peerDependencies` or `bundleDependencies`,
+   exactly the four files `scripts/check-package.mjs` allows, and the SHA-256 of `dist/mothdex-mcp.mjs` equal to the attested `.mjs`.
+5. In the same step as the publish, the tarball's SHA-256 is compared once more with its `checksums.txt` line, then
+   `npm publish <path-to-the-tgz> --provenance --access public --ignore-scripts` with no token in the environment. There is no
+   `npm pack` and no `npm publish .` in this job (MP-4).
+6. Before publishing, `npm view mothdex-mcp@<version>`: if the version exists, only the checks of step 7 run (a re-run must not
+   publish again). There is no retry around the publish (MP-11).
+7. After publishing, with the same config: `npm view mothdex-mcp@<version> dist.integrity` equals the SHA-512 of the verified
+   tarball; in an empty directory `npm install mothdex-mcp@<version> --ignore-scripts` followed by `npm audit signatures` passes; the
+   provenance attestation of that version names repository `Or4cu1o/mothdex-mcp`, workflow `release.yml` and ref
+   `refs/tags/<tag>` when npm exposes a stable way to read it (MP-12).
+8. A failure after the publish is not retried by publishing again (a version is immutable): the run stops and the owner decides
    (deprecate and release a patch version).
 
-### Job `registry` (after `npm`)
+### Job `registry` (after `npm`; environment `mcp-registry`)
 
-1. The same download, checksum and attestation verification.
-2. Generate the `mcpb` package entry of `server.json` at release time (the committed `server.json` keeps only the npm entry):
-   `registryType: "mcpb"`, `identifier` = the GitHub release URL of `mothdex-mcp_<version>.mcpb` for this tag, `fileSha256` = its
-   line in the verified `checksums.txt`, `version` = the tag's. The hash cannot be committed beforehand, which is why it is generated.
-3. `mcp-publisher`, a **pinned version** whose release asset is verified before it runs: SHA-256 pinned in the repository and the
-   Sigstore bundle of that release verified with the pinned cosign identity (whether upstream publishes a bundle for it is
-   to be checked in phase B; if it does not, the pinned SHA-256 alone is the check and this is stated, not hidden).
-4. `mcp-publisher validate` on the generated file, then `mcp-publisher login github-oidc` and `mcp-publisher publish`. The name
-   `io.github.Or4cu1o/mothdex-mcp` is authenticated by the GitHub identity of the repository owner.
+1. The same download, checksum, attestation and tag checks. Permissions: `contents: read`, `attestations: read`, `id-token: write`.
+2. `server.json` for the registry is generated with `jq --arg` (never string concatenation) from the tag (already semver-checked), the
+   fixed repository `Or4cu1o/mothdex-mcp` and the `.mcpb` line of the verified `checksums.txt` (64 lower-case hex
+   characters): `registryType: "mcpb"`, `identifier` exactly `https://github.com/Or4cu1o/mothdex-mcp/releases/download/<tag>/mothdex-mcp_<version>.mcpb`,
+   `fileSha256` that hash, `version` the tag's, and the `name` equal to `package.json` `mcpName`; the npm entry's version is checked against `npm view` of
+   the version just published. The committed `server.json` keeps only the npm entry (MP-7).
+3. `mcp-publisher` is a pinned version downloaded by its exact release URL into a fresh directory; its SHA-256 is pinned in the
+   repository and checked before `chmod +x`. If upstream publishes a Sigstore bundle or a GitHub attestation it is verified with
+   the pinned signer identity; if not, this document says that the pinned hash is the only check (trust on first use, as for
+   the SDL2.dll of mothdex-cli). Never taken from PATH, a cache or `go install @latest` (MP-8).
+4. `mcp-publisher validate` must pass before `mcp-publisher login github-oidc` and `mcp-publisher publish`. No retry (MP-7, MP-11).
 5. The `.mcpb` URL must keep working for as long as the entry lists it: releases are never deleted (immutable releases on).
+6. Order and visibility: GitHub release, then `npm`, then `registry`, each needing the previous one; the job summaries print the
+   published integrity, the `server.json` that was sent and the registry's answer, so the owner can check them before announcing (MP-13).
 
 ### What the owner must configure (nothing is done by this repository)
 
 For **phase A** (already in the pull request): accept or refuse the single pnpm exception `undici-types@6.21.0` in
 `tools/mcpb/pnpm-workspace.yaml`; nothing else, no new required check name.
 
-For **phase B**, in this order, only when the owner decides to publish:
+For **phase B**, only when the owner decides to publish (O-1 to O-8 of the threat model):
 
-1. An npm account (owner identity, two-factor authentication on, `auth-and-writes`) and the name `mothdex-mcp` free (D28 6b).
-2. The first publish of the name, by the owner, by hand and with a short-lived granular token that is revoked right after
-   (T-60 SC-01); then, on the package page, a **trusted publisher**: repository `Or4cu1o/mothdex-mcp`, workflow `release.yml`,
-   environment `release`.
-3. Package settings: require two-factor authentication and **disallow tokens** once the trusted publisher works.
-4. The GitHub environment `release` already exists (required reviewer, tags `v*`): no change, but it now gates three jobs, so the
-   reviewer approves each one.
-5. The release pull request flips `private` to `false` and bumps the versions (T-66 item 5); until then `npm publish` is refused
-   by npm itself, which is the intended gate.
-6. Nothing to configure for the MCP registry beyond the GitHub identity; the namespace `io.github.Or4cu1o` follows from it.
+1. **O-1:** an npm account with two-factor authentication for authentication and writes, the owner identity (D28 1c), and the name
+   `mothdex-mcp` free (D28 6b).
+2. **O-2 (MP-10):** the first publish of the name by the owner, by hand, of the attested `.tgz` of the first GitHub release,
+   downloaded and verified with `sha256sum` and `gh attestation verify` in an empty directory, with a granular token scoped to
+   `mothdex-mcp` only and the shortest expiry, deleted the same day. If npm allows a trusted publisher before the first version
+   (not verified), this token step is dropped. A placeholder version is not recommended: it would be the one version without
+   provenance.
+3. **O-3:** on the package, a **trusted publisher**: repository `Or4cu1o/mothdex-mcp`, workflow `release.yml`, **environment `release`**;
+   then "Require two-factor authentication and disallow tokens".
+4. **O-4:** GitHub environment `release`: required reviewer (the owner), deployment policy **selected tags `v*` only** (no
+   branches), "Allow administrators to bypass" off. It now gates `publish` and `npm`, so the reviewer approves each job.
+5. **O-5:** a **new** GitHub environment `mcp-registry` with the same settings; npm does not trust it.
+6. **O-6:** a tag ruleset for `v*` (creation only by the owner, update and deletion blocked), immutable releases on, default
+   `GITHUB_TOKEN` permissions read-only, the allowed-actions list as today, and no secret named like `NPM_TOKEN` at repository,
+   environment or organization level.
+7. **O-7:** `main` requires the checks including `dist == build(src)` and a review on `.github/workflows/`, `package.json` and any
+   `.npmrc` (CODEOWNERS, as recommended for mothdex-cli; with one identity it needs the owner's decision, see PR-78).
+8. **O-8:** how the registry scopes a `github-oidc` login (the repository or the owner namespace) is to be checked in phase B; if it
+   is the namespace, no other repository of `Or4cu1o` should run `mcp-publisher`, or the owner accepts the residual.
+9. The release pull request flips `private` to `false` and bumps the versions (T-66 item 5); until then `npm publish` is refused by
+   npm itself, which is the intended gate.
 
-### Residuals to judge in the threat model
+### Residuals
 
-- A compromised release workflow could publish anything under the trusted publisher: the tag ruleset, the environment reviewer
-  and the verification of attested files are the controls; the registry and npm only see what the workflow sends.
-- npm and the registry are third parties; `npm audit signatures` and the attestation verify what was published, not that it
-  stays available.
-- `mcp-publisher` runs with an OIDC token in the job: its provenance is the pinned checksum (and the bundle, if it exists).
+- Provenance and signatures prove where a version came from, not that its dependencies were benign: the controls stay the lockfile,
+  `--ignore-scripts`, `dist == build(src)` and the reviews.
+- The registry namespace may be owner-wide (see O-8).
+- With one person (D28 1c) a stolen owner session can tag and approve; the tag ruleset, the tag-to-commit check and the attestation
+  checks limit what it can do outside the workflow, not inside it.
+- npm and the MCP registry are third parties and the MCP registry is in preview: the checks verify what was published, not its
+  availability, and its data can be reset.
+- `mcp-publisher` may be trust on first use (MP-8).
