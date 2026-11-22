@@ -7,7 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-22
+
+### Fixed
+
+- T-86: the downloader tests remove the temporary folders they create (`mothdex-copy-*`, `mothdex-sig-*`, `mothdex-dst-*`, `mothdex-dl-*`), so a test run no longer leaves hundreds of folders in `/tmp`.
+
 ### Changed
+
+- T-76: a pull request no longer edits `CHANGELOG.md`: it adds `changes/<branch>.md` (see `changes/README.md`), and the release step runs
+  `scripts/changelog-fold.sh` to fold the fragments into `CHANGELOG.md` and delete them, so open pull requests stop conflicting on the changelog. CI checks
+  the fragments with `scripts/changelog-fold.sh --check`. `AGENTS.md`, `CONTRIBUTING.md`, the pull request template and the release checklist say so.
+  The existing `CHANGELOG.md` content is untouched.
+- T-77: `tools.md` Errors follows the upstream error codes of mothdex-cli `api-client.md` §3.1 (status first, exact
+  `info.error` code, unknown code is `upstream` not retryable, old form kept, `RATE_LIMIT_ERROR` as a 429). The
+  upstream message never reaches tool output: only the fixed message per code does, and the upstream text goes to the
+  stderr log, sanitized and capped at 200 bytes.
+- T-82: `plugin.md` §5.3 follows phase A and the T-82 threat model: the `.mcpb` holds exactly the manifest and the bundle
+  until the icon exists; `id-token: write` sits on `attest`, `npm` and `registry` with separate environments (MP-1, MP-2);
+  `mcp-publisher` is checked by its pinned hash, and by a signature when upstream publishes one (MP-8).
+- T-82: `plugin.md` §5.3 lists the full release asset set of phase B: the `.mjs`, the `.mcpb`, the npm `.tgz` and `server.json`, all in
+  `checksums.txt` and attested; the GitHub release holds exactly that set.
+- T-77-mcp: the API client reads the upstream error code (mothdex-api 7a87af9: `info.error` is a code such as `ENTRY_NOT_FOUND`, `info.message` the text).
+  An HTTP 200 code maps to a kind: `ENTRY_NOT_FOUND` to `not_found`; `INVALID_API_VERSION` to `api_incompatible`; `MALFORMED_JSON`,
+  `INVALID_JSON_OBJECT`, `MISSING_REQUIRED_FIELDS`, `INVALID_FIELD_TYPE` and `INVALID_INPUT` to `invalid_request`; `DB_OPERATION_ERROR`, `DB_ERROR` and
+  `UNEXPECTED_ERROR` to a retried `upstream`; `RATE_LIMIT_ERROR` to `rate_limited` with the 429 rules (Retry-After, circuit); any other code, `HTTP_ERROR` included,
+  to the generic `api` kind. On a non-200 the HTTP status still decides, except a 400 with `INVALID_API_VERSION` (`api_incompatible`). The old text form of `info.error`
+  still works, and `info.code` is ignored. `MothdexError` gains `code`.
+- T-77-mcp: the MCP tool error message is now fixed English per code. The upstream message no longer reaches `structuredContent` or `text`; it goes to the stderr
+  log only, with control, format and line-separator characters removed and cut to 200 bytes (the client error keeps up to 512 bytes and never uses it for logic).
 
 - T-63: `download_file` implements T-27. A missing, chunked, `0` or malformed `Content-Length` is `size_mismatch`, as is one above `4 × link.size + 256 MiB` or the per-file cap; the total-bytes budget (`quota_exceeded`) and the space ledger (`disk_full`, claim `2 × cl`) re-run on it before the first body byte; `bytes` and progress `total` equal it, and a large drift from `link.size` logs one stderr line.
 - `download_file` contract (T-27, tools.md §3.4, T-60): the proxy's `Content-Length` is the size authority, because the maintainer states `link.size` is scraped and only a rough indicator (cavv-dev/mothdex-api#1). The length is required and strict, capped by the fixed `CL_UPPER_BAND = 4 × link.size + 256 MiB`, and the per-file cap, the total-bytes budget and the space check re-run on it before the body; `bytes` and progress `total` equal it. `link.size` stays a preflight estimate.
@@ -15,6 +43,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (one API call per object), and refuses to upload files that `checksums.txt` does not list, same as mothdex-cli.
 
 ### Added
+
+- T-82 phase A: the release also builds a `.mcpb` (MCP Bundle) of the committed bundle, packed and validated with the pinned `@anthropic-ai/mcpb` (own project and frozen lockfile in `tools/mcpb`, install scripts off),
+  checked to hold exactly the manifest and the bundle (byte for byte the committed files, smoke test of the bundle inside it), listed in `checksums.txt`, attested like the other release file and uploaded with
+  the release. `pnpm check:package` runs in the release build too, and `scripts/pack-mcpb.sh` runs in the existing `dist == build(src)` CI job, so no new check name. `docs/release.md` gains the design of the npm and
+  MCP registry publishing (not implemented) and the list of what the owner must configure.
+- T-82 phase B: `release.yml` gets the `npm` job (environment `release`, trusted publishing, no checkout, empty npm config and `registry.npmjs.org` forced, the verified tarball published by path with `--ignore-scripts`,
+  integrity, `npm audit signatures` and provenance checked after) and the `registry` job (its own environment `mcp-registry`, no checkout, the pinned `mcp-publisher` verified by SHA-256 and its Sigstore bundle, `server.json`
+  generated with `jq` from the verified files, `login github-oidc`). The build job now also packs the npm tarball and attests it with the committed `server.json`. Dormant while `private: true` and until the owner
+  configures the environments and the trusted publisher. `scripts/exercise-release-steps.py` exercises the non-publishing steps in CI; `scripts/pack-mcpb.sh` also pins every supply-chain setting and the accepted
+  advisories of `tools/mcpb`. `scripts/check-package.mjs` lets `private` be false only when the changelog has that version's section. A pre-release tag skips both publishing jobs. The release docs describe it, the partial-publish recovery and the owner settings.
+- T-82: threat model of the npm publish and MCP registry jobs (`docs/security/T-82-threat-model-mcp-publish.md`).
+- T-85: the `.mcpb` now carries its icon: `mcpb/icon.png` (512x512, the project-owned art approved in D30), referenced by `mcpb/manifest.json` as `icon`. `scripts/pack-mcpb.sh` stages it, expects exactly three members (`manifest.json`, `icon.png`, `dist/mothdex-mcp.mjs`),
+  compares each byte for byte with the committed file and checks the PNG with `scripts/check-icon.mjs` (signature, IHDR first, 512x512, the 12-byte IEND at the end so a truncated file fails; also used by `check-package.mjs`; missing file gives a message, not a stack trace); `mcpb validate` passes with the icon. `scripts/check-package.mjs` checks the manifest reference and the PNG too. `docs/release.md` and `plugin.md` 5.3 give the new list,
+  and plugin.md 5.3 says a pre-release tag is a GitHub pre-release only (the npm and registry jobs are skipped for it).
 
 - T-66: distribution metadata for the next release, preparation only (nothing is published). `package.json` gets `mcpName`, `bin`, `files`
   (`dist/mothdex-mcp.mjs`, `README.md`, `LICENSE`) and `publishConfig` (public, provenance); `@modelcontextprotocol/server` and
