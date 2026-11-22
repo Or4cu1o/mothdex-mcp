@@ -6,9 +6,10 @@ import { DOWNLOAD_DESCRIPTION } from "./tool";
 
 let harness: Harness | undefined;
 let rig: Rig | undefined;
+const rigs: Rig[] = [];
 afterEach(async () => {
   await harness?.close();
-  rig?.cleanup();
+  for (const made of rigs.splice(0)) made.cleanup();
   harness = undefined;
   rig = undefined;
 });
@@ -18,6 +19,7 @@ async function start(
   enabled = true,
 ): Promise<Harness> {
   rig = makeRig({ replies });
+  rigs.push(rig);
   harness = await startHarness(
     [{ body: entryBody([rawLink()]) }],
     () => {},
@@ -95,6 +97,7 @@ describe("download_file over MCP", () => {
 
   it("an upstream error code gives the fixed message and the text only reaches the log", async () => {
     rig = makeRig({ replies: [] });
+    rigs.push(rig);
     const warnings: string[] = [];
     const body = JSON.stringify({
       info: { error: "ENTRY_NOT_FOUND", message: "SECRET-TEXT" },

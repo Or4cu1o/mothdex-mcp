@@ -2,12 +2,20 @@ import { EventEmitter } from "node:events";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { codeOf, copyExclusive } from "./fs-seam";
 import { installShutdownHandlers } from "./shutdown";
 import { DownloadState } from "./state";
 
-const dir = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "mothdex-copy-"));
+const made: string[] = [];
+afterEach(() => {
+  for (const base of made.splice(0)) fs.rmSync(base, { recursive: true, force: true });
+});
+const dir = (): string => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "mothdex-copy-"));
+  made.push(base);
+  return base;
+};
 
 /** The exclusive copy used when `link` is not available (Alicerce S1: no partial final file). */
 describe("copyExclusive", () => {
