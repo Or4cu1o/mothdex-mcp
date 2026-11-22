@@ -289,16 +289,19 @@ jobs:
           want=$(awk -v f="$name" '$2 == f { print $1 }' release/checksums.txt)
           [ "$(sha256sum "release/$name" | cut -d' ' -f1)" = "$want" ] || { echo "the tarball changed since it was verified"; exit 1; }
           # a re-run after a publish must not publish again (a version is immutable): only the checks below run (MP-11)
-          # The exit status of `npm view` is not trusted (versions differ for a version that is not there yet): the version is
-          # published only when the answer is exactly the version; empty or E404 means not published; anything else stops.
-          out=$(npm view "mothdex-mcp@${version}" version --registry https://registry.npmjs.org/ 2>&1) || true
+          # The exit status of `npm view` is not trusted (versions differ for a version that is not there yet). Only STDOUT says the
+          # version exists (it must equal the version exactly); STDERR is read only to tell "not found" from a real error, so npm
+          # notices cannot change the decision. E404 (on either stream), or empty stdout without any npm error line, means not published;
+          # anything else stops.
+          err=$(mktemp "$RUNNER_TEMP/npm-view.XXXXXX")
+          out=$(npm view "mothdex-mcp@${version}" version --registry https://registry.npmjs.org/ 2>"$err") || true
           if [ "$out" = "$version" ]; then
             echo "mothdex-mcp@${version} is already on npm: not publishing again"
-          elif [ -z "$out" ] || printf '%s' "$out" | grep -q 'E404'; then
+          elif printf '%s\n' "$out" | grep -q 'E404' || grep -q 'E404' "$err" || { [ -z "$out" ] && ! grep -qiE 'npm (error|err!)' "$err"; }; then
             npm publish "./release/$name" --provenance --access public --ignore-scripts --registry https://registry.npmjs.org/
           else
-            echo "$out"
-            echo "npm view answered something else than the version, empty or E404: not publishing"
+            cat "$err"
+            echo "npm view answered '$out': not the version, not empty and not E404: not publishing"
             exit 1
           fi
       - name: What npm serves is what was verified (integrity, signatures, provenance)
