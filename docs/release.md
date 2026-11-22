@@ -91,7 +91,7 @@ that path (the attestation is looked up by the file's digest, not its name).
 
 ## First release v0.1.0: owner checklist (T-34-owner, T-23)
 
-Prepared at main `bf994da`. **OWNER OK** marks a settings change, the tag or a publish. `release.yml` has never run on a tag.
+Prepared at main `bf994da`; carried out for v0.1.0 (release run 45082044626, see "First release: what happened" below). **OWNER OK** marks a settings change, the tag or a publish.
 
 1. **Gates before the tag.** CI green on `main` (including `dist == build(src)`, `actionlint`, marketplace validation);
    gitleaks clean; the agents' bot identity replaces the owner identity (D14, **OWNER OK**, owner decision open: which
@@ -147,19 +147,35 @@ Verified while preparing this: `actionlint` (pinned image) clean; `release.yml` 
 verified:** any real tag run (`gh attestation verify`, the tag-to-commit check, `--verify-tag`, the environment approval), and
 the marketplace install from the pinned tag.
 
-## Publishing to npm and to the MCP registry (implemented in `release.yml`, dormant)
+## Publishing to npm and to the MCP registry (implemented in `release.yml`)
 
-Status: implemented as designed by Sentinela's threat model (constraints MP-1 to MP-13, owner settings O-1 to O-8) and **never run
-on a tag**. It is dormant: `package.json` says `private: true`, so the `npm` job refuses the tarball (and npm itself would), and
-the jobs need the environments and the trusted publisher the owner has not configured yet. There is no npm login and no token.
-A job that cannot run without a tag is checked statically: `actionlint` (shellcheck inside), and the CI step
+Status: implemented as designed by Sentinela's threat model (constraints MP-1 to MP-13, owner settings O-1 to O-8). It did not
+publish v0.1.0 by itself (see below); from v0.1.1 on the `npm` and `registry` jobs are expected to publish with provenance. A job that
+cannot run without a tag is checked statically: `actionlint` (shellcheck inside), and the CI step
 `scripts/exercise-release-steps.py --with-publisher`, which runs the real `run:` text of the tarball-rules step and of the
 `server.json` step against files built from the tree (positive and negative cases), fetches the pinned `mcp-publisher` through
-the registry job's own step (hash and Sigstore bundle verified) and runs `mcp-publisher validate` on the generated file. What
-stays unverified until the first tag: `gh attestation verify` in these jobs, npm trusted publishing and `--provenance`,
-`npm audit signatures`, `mcp-publisher login github-oidc` and `publish`, and the shape of npm's provenance endpoint (a
-different shape is a warning, a different workflow or ref is a failure). Owner decisions it rests on: D28 6b (the npm package
-name is the unscoped `mothdex-mcp`), D28 3 (no tag until the planned scope is finished), D28 1c (the owner identity, no bot).
+the registry job's own step (hash and Sigstore bundle verified) and runs `mcp-publisher validate` on the generated file. Still
+unverified by a run of these jobs: `gh attestation verify` in them, npm trusted publishing and `--provenance`, `npm audit signatures`,
+`mcp-publisher login github-oidc` and the shape of npm's provenance endpoint. Owner decisions it rests on: D28 6b (the npm package
+name is the unscoped `mothdex-mcp`), D28 1c (the owner identity, no bot).
+
+### First release: what happened (v0.1.0)
+
+- **GitHub release:** the tag run (45082044626) built, attested and published the five files (`.mjs`, `.mcpb`, `.tgz`, `server.json`,
+  `checksums.txt`) as designed.
+- **npm: manual first publish.** npm trusted publishing can only be configured for a package that already exists, so the
+  `npm` job could not publish the first version. The owner published `mothdex-mcp@0.1.0` by hand from the attested `.tgz` of the release
+  (same file, same integrity), then set the trusted publisher (workflow `release.yml`, environment `release`). That version has no npm
+  provenance. npm also created a placeholder version `0.0.0-stage` when the package was created; it is not a release and is ignored.
+- **The provenance check returned 404.** The `npm` job's post-publish check does `curl -f` on the registry's attestations endpoint,
+  which answers 404 for a version published without provenance, so for v0.1.0 that check fails. Later releases are expected not to hit it: a
+  version published by the job carries provenance (not yet seen on a real run).
+- **MCP registry: manual publish.** The `registry` job needs the `npm` job, which failed on that check, so it was not used. The entry
+  `io.github.Or4cu1o/mothdex-mcp` 0.1.0 (npm and `.mcpb` packages) was published by hand with the pinned `mcp-publisher` v1.8.9 and
+  the same generated `server.json` steps as the job. It is active.
+- **From v0.1.1:** the workflow publishes to npm (trusted publishing, `--provenance`) and then to the registry. Check on the first
+  run that the provenance endpoint check passes, and re-run only failed jobs (never "Re-run all jobs").
+- **Marketplace:** pinned to `v0.1.0` at `468121c` in a pull request after the tag, as step 3 of the release steps says.
 
 ### Principles
 

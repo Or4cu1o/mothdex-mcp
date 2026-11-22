@@ -8,8 +8,16 @@
 [Model Context Protocol](https://modelcontextprotocol.io) server for the
 [Mothdex](https://api.mothdex.net) API.
 
-> **Status: pre-alpha.** The stdio server, its read tools, resources and prompts work against the live API
-> but nothing is released yet. The Claude Code plugin, the `.mcpb` package and the registry entry are still planned.
+> **Status: v0.1.0.** First release: the stdio server, its read tools, resources and prompts work against the live API.
+> It is published on npm, in the MCP registry, as a Claude Code plugin and as a Claude Desktop `.mcpb`.
+
+## Install
+
+- **npm:** `npx -y mothdex-mcp` (Node 22 or later), or configure your client with command `npx` and args `["-y", "mothdex-mcp"]`.
+- **MCP registry:** `io.github.Or4cu1o/mothdex-mcp`.
+- **Claude Desktop:** download `mothdex-mcp_0.1.0.mcpb` from the [latest release](https://github.com/Or4cu1o/mothdex-mcp/releases/latest)
+  and open it. The release also has `checksums.txt` and build provenance (`gh attestation verify`).
+- **Claude Code plugin:** see [Install in Claude Code](#install-in-claude-code).
 
 ## What it offers
 
@@ -25,11 +33,9 @@ Configuration is environment only: `MOTHDEX_API_BASE_URL` (default `https://api.
 `MOTHDEX_API_RATE_LIMIT` (requests per second, clamped to 1..10, default 5) and `MOTHDEX_ALLOWED_HOSTS`
 (comma list, default `proxy.mothdex.net`). Logs go to stderr; stdout carries only the protocol.
 
-## Planned
+## Done and planned
 
 - [ ] Opt-in, directory-confined file download tool (off by default)
-- [x] Claude Code plugin and marketplace (pinned to a release tag after `v0.1.0`)
-- [ ] Claude Desktop `.mcpb` package and MCP registry entry
 - [x] Single-file bundle without runtime dependencies, attached to each release with checksums and provenance
 
 ## Downloads (opt-in)
@@ -54,8 +60,8 @@ that file is the real boundary (see [SECURITY.md](SECURITY.md)). The design is i
 
 ## Install in Claude Code
 
-The bundle `dist/mothdex-mcp.mjs` is committed, so a git install works. From the first release the marketplace entry is
-pinned to the release tag and commit ([docs/release.md](docs/release.md)):
+The marketplace entry is pinned to the release tag and commit, so you install exactly the attested release
+([docs/release.md](docs/release.md)):
 
 ```text
 /plugin marketplace add Or4cu1o/mothdex-mcp
