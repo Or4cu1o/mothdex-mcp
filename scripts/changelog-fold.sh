@@ -54,10 +54,13 @@ if [ "$mode" = check ] && [ -n "$release" ]; then die "--check and --release can
 # Everything in changes/ is either README.md or a fragment: a plain, non-empty, lower-case .md file that is not a link.
 # Anything else (a hidden file, another extension, a folder, a link, an empty file) is refused, never skipped.
 files=""
-for f in changes/* changes/.[!.]*; do
+nl='
+'
+for f in changes/* changes/.[!.]* changes/..?*; do
   [ -e "$f" ] || [ -L "$f" ] || continue
   name=${f#changes/}
   [ "$name" != README.md ] || continue
+  case $name in *"$nl"*) die "a file name in changes/ has a newline in it: refused" ;; esac
   printf '%s\n' "$name" | grep -Eq '^[a-z0-9][a-z0-9._-]*[.]md$' ||
     die "$f: a fragment is named like its branch, with only a-z 0-9 . _ - and the extension .md (anything else in changes/ is refused)"
   [ ! -L "$f" ] || die "$f: a fragment cannot be a link"
