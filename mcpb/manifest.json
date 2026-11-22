@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "mothdex-mcp",
   "display_name": "Mothdex",
-  "version": "0.1.0",
+  "version": "0.1.0-rc.1",
   "description": "Search the Mothdex game catalog and resolve download links",
   "author": { "name": "Or4cu1o" },
   "repository": { "type": "git", "url": "https://github.com/Or4cu1o/mothdex-mcp.git" },

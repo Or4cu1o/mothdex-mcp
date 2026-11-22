@@ -3,7 +3,7 @@
   "name": "io.github.Or4cu1o/mothdex-mcp",
   "title": "Mothdex",
   "description": "Search the Mothdex game catalog and resolve download links",
-  "version": "0.1.0",
+  "version": "0.1.0-rc.1",
   "repository": { "url": "https://github.com/Or4cu1o/mothdex-mcp", "source": "github" },
   "websiteUrl": "https://github.com/Or4cu1o/mothdex-mcp",
   "packages": [
@@ -11,7 +11,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "mothdex-mcp",
-      "version": "0.1.0",
+      "version": "0.1.0-rc.1",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {
