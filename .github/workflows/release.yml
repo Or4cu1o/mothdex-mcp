@@ -1,10 +1,14 @@
 name: Release
 
-# Runs only for version tags. Three jobs with separate permissions:
-# build (read-only repo) -> attest (OIDC + attestations) -> publish (the only job that can write contents).
+# Runs only for version tags. Five jobs with separate permissions, each one needing the previous ones:
+# build (read-only repo) -> attest (OIDC + attestations) -> publish (the only job that can write contents)
+# -> npm (environment release, OIDC for npm) -> registry (environment mcp-registry, OIDC for the MCP registry).
 # The release files are the single-file bundle and the .mcpb that wraps it; both are listed in checksums.txt, so the
 # attestation of checksums.txt's subjects covers both, and publish verifies and uploads exactly that set.
-# Publishing to npm and to the MCP registry is NOT done here: it is designed in docs/release.md and not implemented.
+# After the GitHub release, two more jobs publish: `npm` (environment `release`, trusted publishing) and `registry` (its own
+# environment `mcp-registry`, GitHub OIDC login). Both start from the downloaded, re-verified artifact, never from a checkout
+# (T-82 threat model MP-3), and neither runs until the owner has configured the settings listed in docs/release.md. Nothing is
+# published while package.json says private: true: the npm job refuses it and npm itself would too.
 # No dependency cache is used anywhere in this workflow (T-4 audit), and dependencies install with the frozen
 # lockfile and no install scripts. Owner-side settings it relies on (environment `release` with required
 # reviewers, tag ruleset for v*) and the release steps are in docs/release.md.
@@ -77,7 +81,11 @@ jobs:
           # validates the manifest, packs, lists the members (exactly two), compares them with the committed files and
           # smokes the bundle inside the archive; the version in the file name is package.json's, which equals the tag
           scripts/pack-mcpb.sh release
-          (cd release && sha256sum "mothdex-mcp_${TAG#v}.mjs" "mothdex-mcp_${TAG#v}.mcpb" > checksums.txt)
+          # the npm tarball is made here, once, from the clean tree, and attested like the other files; the npm job publishes
+          # exactly this file and never packs again (MP-4). server.json is the committed one: the registry job extends it.
+          npm pack --ignore-scripts --pack-destination release
+          cp server.json release/server.json
+          (cd release && sha256sum "mothdex-mcp_${TAG#v}.mjs" "mothdex-mcp_${TAG#v}.mcpb" "mothdex-mcp-${TAG#v}.tgz" server.json > checksums.txt)
           cat release/checksums.txt
       - name: Smoke the staged release file
         env:
@@ -172,4 +180,302 @@ jobs:
           flags=""
           case "$TAG" in *-*) flags="--prerelease" ;; esac
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes $flags \
-            "mothdex-mcp_${TAG#v}.mjs" "mothdex-mcp_${TAG#v}.mcpb" checksums.txt
+            "mothdex-mcp_${TAG#v}.mjs" "mothdex-mcp_${TAG#v}.mcpb" "mothdex-mcp-${TAG#v}.tgz" server.json checksums.txt
+
+  # Publishes the verified npm tarball. Trusted publishing (OIDC): `id-token: write` only here and on attest/registry, the
+  # environment `release` is the one the npm trusted publisher is bound to (MP-1). No checkout, no token, no secret (MP-3, MP-9).
+  npm:
+    name: publish to npm
+    needs: [build, attest, publish]
+    # a pre-release tag (vX.Y.Z-rc.1) is a GitHub pre-release only: npm would need --tag for it and the registry lists stable versions
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: read # the tag-to-commit check reads the repository ref
+      attestations: read # gh attestation verify
+      id-token: write # npm trusted publishing
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: release
+      - name: Verify checksums, attestations and the tag before any token is used
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum --check --strict checksums.txt
+          for f in checksums.txt $(awk '{print $2}' checksums.txt); do
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$SIGNER_WORKFLOW" --source-ref "refs/tags/$TAG" \
+              --source-digest "$GITHUB_SHA" --deny-self-hosted-runners
+          done
+          want=$( { awk '{print $2}' checksums.txt; echo checksums.txt; } | sort )
+          have=$(find . -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)
+          [ "$want" = "$have" ] || { echo "the files differ from checksums.txt plus checksums.txt itself"; diff <(echo "$want") <(echo "$have") || true; exit 1; }
+          out=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.type + " " + .object.sha')
+          type=${out% *}; sha=${out#* }
+          for _ in 1 2 3; do
+            [ "$type" = "tag" ] || break
+            out=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq '.object.type + " " + .object.sha')
+            type=${out% *}; sha=${out#* }
+          done
+          if [ "$type" != "commit" ] || [ "$sha" != "$GITHUB_SHA" ]; then echo "tag $TAG does not point at the commit this run built"; exit 1; fi
+      # MP-6: the npm CLI is the one bundled with this exact Node (npm >= 11.5.1 is needed for trusted publishing).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.13.1
+          package-manager-cache: false
+      - name: Pin the npm configuration
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/npm"
+          # two different empty files: npm must not see one path as both its user and its global configuration
+          : > "$RUNNER_TEMP/npm/user.npmrc"
+          : > "$RUNNER_TEMP/npm/global.npmrc"
+          {
+            echo "NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/npm/user.npmrc"
+            echo "NPM_CONFIG_GLOBALCONFIG=$RUNNER_TEMP/npm/global.npmrc"
+            echo "NPM_CONFIG_REGISTRY=https://registry.npmjs.org/"
+          } >> "$GITHUB_ENV"
+      - name: The Node and npm versions are the pinned ones
+        run: |
+          set -euo pipefail
+          [ "$(node --version)" = "v26.13.1" ] || { echo "node is $(node --version), expected v26.13.1"; exit 1; }
+          [ "$(npm --version)" = "11.20.0" ] || { echo "npm is $(npm --version), expected 11.20.0 (the one bundled with that Node)"; exit 1; }
+      - name: No other npm configuration is in effect
+        run: |
+          set -euo pipefail
+          other=$(env | cut -d= -f1 | grep -iE '^npm_config_' | grep -viE '^NPM_CONFIG_(USERCONFIG|GLOBALCONFIG|REGISTRY)$' || true)
+          [ -z "$other" ] || { echo "unexpected npm configuration in the environment: $other"; exit 1; }
+          [ "$(npm config get registry)" = "https://registry.npmjs.org/" ] || { echo "the npm registry is not registry.npmjs.org"; exit 1; }
+          [ -z "$(env | grep -iE '^(NODE_AUTH_TOKEN|NPM_TOKEN)=' || true)" ] || { echo "an npm token is in the environment"; exit 1; }
+      - name: The tarball is what was attested, and is publishable (MP-4)
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=${TAG#v}
+          tgz="release/mothdex-mcp-${version}.tgz"
+          # read with tar to stdout, never extracted into a path npm reads
+          pj=$(tar -xzOf "$tgz" package/package.json)
+          echo "$pj" | jq -e --arg v "$version" '
+            .name == "mothdex-mcp" and .version == $v and .private == false and .mcpName == "io.github.Or4cu1o/mothdex-mcp"
+            and (.bin == {"mothdex-mcp": "dist/mothdex-mcp.mjs"})
+            and (.publishConfig == {"access": "public", "provenance": true})
+            and ((.dependencies // {}) == {}) and ((.optionalDependencies // {}) == {}) and ((.peerDependencies // {}) == {})
+            and (.bundleDependencies == null) and (.bundledDependencies == null)
+            and ([(.scripts // {}) | keys[] | select(test("^(pre|post)?(install|prepare|publish|pack|prepublishOnly|prepublish)$"))] == [])' >/dev/null \
+            || { echo "package.json inside the tarball is not what the release publishes (private must be false, version the tag's, no lifecycle scripts or dependencies)"; exit 1; }
+          members=$(tar -tzf "$tgz" | LC_ALL=C sort)
+          want=$(printf '%s\n' package/LICENSE package/README.md package/dist/mothdex-mcp.mjs package/package.json | LC_ALL=C sort)
+          [ "$members" = "$want" ] || { echo "the tarball members differ from the four allowed files"; diff <(echo "$want") <(echo "$members") || true; exit 1; }
+          if tar -tvzf "$tgz" | cut -c1 | grep -v '^-' >/dev/null; then echo "the tarball has a member that is not a regular file"; exit 1; fi
+          inner=$(tar -xzOf "$tgz" package/dist/mothdex-mcp.mjs | sha256sum | cut -d' ' -f1)
+          asset=$(sha256sum "release/mothdex-mcp_${version}.mjs" | cut -d' ' -f1)
+          [ "$inner" = "$asset" ] || { echo "dist/mothdex-mcp.mjs in the tarball is not the attested release file"; exit 1; }
+          echo "tarball ok: $(sha256sum "$tgz" | cut -d' ' -f1)"
+      - name: Publish the verified tarball (no repack, no retry)
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=${TAG#v}
+          name="mothdex-mcp-${version}.tgz"
+          want=$(awk -v f="$name" '$2 == f { print $1 }' release/checksums.txt)
+          [ "$(sha256sum "release/$name" | cut -d' ' -f1)" = "$want" ] || { echo "the tarball changed since it was verified"; exit 1; }
+          # a re-run after a publish must not publish again (a version is immutable): only the checks below run (MP-11)
+          # The exit status of `npm view` is not trusted (versions differ for a version that is not there yet). Only STDOUT says the
+          # version exists (it must equal the version exactly); STDERR is read only to tell "not found" from a real error, so npm
+          # notices cannot change the decision. E404 (on either stream), or empty stdout without any npm error line, means not published;
+          # anything else stops.
+          err=$(mktemp "$RUNNER_TEMP/npm-view.XXXXXX")
+          out=$(npm view "mothdex-mcp@${version}" version --registry https://registry.npmjs.org/ 2>"$err") || true
+          if [ "$out" = "$version" ]; then
+            echo "mothdex-mcp@${version} is already on npm: not publishing again"
+          elif printf '%s\n' "$out" | grep -q 'E404' || grep -q 'E404' "$err" || { [ -z "$out" ] && ! grep -qiE 'npm (error|err!)' "$err"; }; then
+            npm publish "./release/$name" --provenance --access public --ignore-scripts --registry https://registry.npmjs.org/
+          else
+            cat "$err"
+            echo "npm view answered '$out': not the version, not empty and not E404: not publishing"
+            exit 1
+          fi
+      - name: What npm serves is what was verified (integrity, signatures, provenance)
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=${TAG#v}
+          name="mothdex-mcp-${version}.tgz"
+          want="sha512-$(openssl dgst -sha512 -binary "release/$name" | base64 -w0)"
+          got=""
+          for _ in $(seq 1 12); do
+            got=$(npm view "mothdex-mcp@${version}" dist.integrity --registry https://registry.npmjs.org/ 2>/dev/null || true)
+            [ -n "$got" ] && break
+            sleep 10
+          done
+          [ "$got" = "$want" ] || { echo "npm serves integrity '$got', the verified tarball has '$want'"; exit 1; }
+          check=$(mktemp -d "$RUNNER_TEMP/npm-check.XXXXXX")
+          (cd "$check" && npm init -y >/dev/null && npm install "mothdex-mcp@${version}" --ignore-scripts --no-audit --no-fund --registry https://registry.npmjs.org/ && npm audit signatures --registry https://registry.npmjs.org/)
+          # the provenance attestation names this repository, workflow and tag (a Suggestion in the threat model: a different
+          # answer shape from npm is a warning, a different workflow or ref is not)
+          curl -fsS --proto '=https' --tlsv1.2 -o "$check/attestations.json" "https://registry.npmjs.org/-/npm/v1/attestations/mothdex-mcp@${version}"
+          wf=$(jq -r '[.attestations[]? | select(.predicateType == "https://slsa.dev/provenance/v1") | .bundle.dsseEnvelope.payload | @base64d | fromjson | .predicate.buildDefinition.externalParameters.workflow] | first // empty | [.repository, .path, .ref] | @tsv' "$check/attestations.json" 2>/dev/null || true)
+          if [ -z "$wf" ]; then
+            echo "::warning::could not read the provenance workflow of the published version from the registry's attestations endpoint"
+          else
+            [ "$wf" = "$(printf 'https://github.com/%s\t.github/workflows/release.yml\trefs/tags/%s' "$GITHUB_REPOSITORY" "$TAG")" ] || { echo "the provenance names '$wf'"; exit 1; }
+          fi
+          {
+            echo "### npm"
+            echo "- mothdex-mcp@${version}, integrity \`$got\`"
+            echo "- npm audit signatures: passed; provenance: ${wf:-not read}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Registers the release in the MCP registry. Its own environment, which npm does not trust: a token minted here cannot
+  # publish to npm (MP-2). No checkout; permissions are exactly these three (MP-9).
+  registry:
+    name: publish to the MCP registry
+    needs: [build, attest, publish, npm]
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: mcp-registry
+    permissions:
+      contents: read
+      attestations: read
+      id-token: write # github-oidc login to the registry
+    env:
+      # Pinned tools (MP-8). The publisher's SHA-256 and the signer identity of its Sigstore bundle; cosign pinned by SHA-256.
+      MCP_PUBLISHER_VERSION: v1.8.9
+      MCP_PUBLISHER_SHA256: 4d527ca8f1ced0394c962dc925c2a4a4addef441cbefd62501c875e9481823a8
+      COSIGN_VERSION: v3.1.4
+      COSIGN_SHA256: 424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: release
+      - name: Verify checksums, attestations and the tag before any token is used
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum --check --strict checksums.txt
+          for f in checksums.txt $(awk '{print $2}' checksums.txt); do
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$SIGNER_WORKFLOW" --source-ref "refs/tags/$TAG" \
+              --source-digest "$GITHUB_SHA" --deny-self-hosted-runners
+          done
+          want=$( { awk '{print $2}' checksums.txt; echo checksums.txt; } | sort )
+          have=$(find . -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)
+          [ "$want" = "$have" ] || { echo "the files differ from checksums.txt plus checksums.txt itself"; diff <(echo "$want") <(echo "$have") || true; exit 1; }
+          out=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.type + " " + .object.sha')
+          type=${out% *}; sha=${out#* }
+          for _ in 1 2 3; do
+            [ "$type" = "tag" ] || break
+            out=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq '.object.type + " " + .object.sha')
+            type=${out% *}; sha=${out#* }
+          done
+          if [ "$type" != "commit" ] || [ "$sha" != "$GITHUB_SHA" ]; then echo "tag $TAG does not point at the commit this run built"; exit 1; fi
+      - name: The pinned mcp-publisher, verified before it runs (MP-8)
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/mcp-tools"
+          mkdir -p "$tools/bin"
+          cd "$tools"
+          base="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          get() { curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 --retry 2 --connect-timeout 20 --max-time 120 -o "$2" "$1"; }
+          get "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64" cosign
+          [ "$(sha256sum cosign | cut -d' ' -f1)" = "$COSIGN_SHA256" ] || { echo "cosign does not match its pinned SHA-256"; exit 1; }
+          chmod +x cosign
+          get "$base/mcp-publisher_linux_amd64.tar.gz" publisher.tar.gz
+          get "$base/mcp-publisher_linux_amd64.tar.gz.sigstore.json" publisher.bundle
+          [ "$(sha256sum publisher.tar.gz | cut -d' ' -f1)" = "$MCP_PUBLISHER_SHA256" ] || { echo "mcp-publisher does not match its pinned SHA-256"; exit 1; }
+          ./cosign verify-blob --bundle publisher.bundle \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com publisher.tar.gz
+          tar -xzf publisher.tar.gz -C bin mcp-publisher
+          chmod +x bin/mcp-publisher
+          echo "$tools/bin" >> "$GITHUB_PATH"
+      - name: Generate server.json from the verified files (MP-7)
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=${TAG#v}
+          [[ "$version" =~ ^[0-9]+[.][0-9]+[.][0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "'$version' is not a semantic version"; exit 1; }
+          mcpb_sha=$(awk -v f="mothdex-mcp_${version}.mcpb" '$2 == f { print $1 }' release/checksums.txt)
+          [[ "$mcpb_sha" =~ ^[0-9a-f]{64}$ ]] || { echo "no valid SHA-256 for the .mcpb in checksums.txt"; exit 1; }
+          # the name must be the one the published package declares
+          mcpname=$(tar -xzOf "release/mothdex-mcp-${version}.tgz" package/package.json | jq -r .mcpName)
+          jq -e --arg v "$version" --arg n "$mcpname" '
+            .name == $n and .version == $v and (.packages | length) == 1
+            and .packages[0].registryType == "npm" and .packages[0].identifier == "mothdex-mcp" and .packages[0].version == $v
+            and .repository.url == "https://github.com/Or4cu1o/mothdex-mcp"' release/server.json >/dev/null \
+            || { echo "the committed server.json is not the npm-only entry for this tag"; exit 1; }
+          jq --arg url "https://github.com/Or4cu1o/mothdex-mcp/releases/download/${TAG}/mothdex-mcp_${version}.mcpb" --arg sha "$mcpb_sha" \
+            '.packages += [{registryType: "mcpb", identifier: $url, fileSha256: $sha, transport: {type: "stdio"}, environmentVariables: .packages[0].environmentVariables}]' \
+            release/server.json > server.generated.json
+          cat server.generated.json
+      - name: What npm serves is the published version (MP-7)
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=${TAG#v}
+          want="sha512-$(openssl dgst -sha512 -binary "release/mothdex-mcp-${version}.tgz" | base64 -w0)"
+          got=$(curl -fsS --proto '=https' --tlsv1.2 "https://registry.npmjs.org/mothdex-mcp/${version}" | jq -r .dist.integrity)
+          [ "$got" = "$want" ] || { echo "npm serves '$got' for mothdex-mcp@${version}, expected '$want'"; exit 1; }
+      - name: Validate the generated server.json
+        run: mcp-publisher validate server.generated.json
+      # Re-entrant like the npm job: a re-run after the registry accepted the version must not send it again (a different
+      # .mcpb hash for the same version is a failure, not an overwrite).
+      - name: Is this version already in the registry?
+        id: state
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=${TAG#v}
+          name=$(jq -r .name server.generated.json)
+          enc=$(jq -rn --arg n "$name" '$n | @uri')
+          code=$(curl -sS --proto '=https' --tlsv1.2 -o existing.json -w '%{http_code}' "https://registry.modelcontextprotocol.io/v0/servers/${enc}/versions/${version}")
+          case "$code" in
+            404) echo "present=false" >> "$GITHUB_OUTPUT" ;;
+            200)
+              ours=$(jq -r '.packages[] | select(.registryType == "mcpb") | .fileSha256' server.generated.json)
+              theirs=$(jq -r '[.server.packages[]? | select(.registryType == "mcpb") | .fileSha256] | first // empty' existing.json)
+              if [ -z "$theirs" ] || [ "$ours" != "$theirs" ]; then echo "the registry already has $name $version with another .mcpb hash ('$theirs', ours '$ours'): stopping"; exit 1; fi
+              echo "present=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "the registry answered HTTP $code: stopping"; exit 1 ;;
+          esac
+      - name: Log in with GitHub OIDC and publish (no retry)
+        if: steps.state.outputs.present != 'true'
+        run: |
+          set -euo pipefail
+          mcp-publisher login github-oidc
+          mcp-publisher publish server.generated.json | tee publish.out
+      - name: Summary
+        if: always() && steps.state.outcome == 'success'
+        run: |
+          {
+            echo "### MCP registry"
+            if [ "${{ steps.state.outputs.present }}" = "true" ]; then echo "Already in the registry with the same .mcpb hash: nothing sent."; fi
+            echo "server.json:"
+            printf '%s\n' '```json'
+            cat server.generated.json
+            printf '%s\n' '```'
+            if [ -f publish.out ]; then
+              echo "Registry answer:"
+              printf '%s\n' '```'
+              cat publish.out
+              printf '%s\n' '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
