@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `zod` move to `devDependencies` because the bundle is self-contained; the package stays `private: true` until the release PR.
   New `server.json` (MCP registry) and `mcpb/manifest.json` (spec 0.3), both with no default for the download folder.
   `scripts/check-versions.mjs` also checks them, and `pnpm check:package` checks the `npm pack --dry-run` list, no runtime
-  dependencies, no lifecycle scripts and `mcpName` against `server.json`. The npm name is `mothdex-mcp` (free on npm on 2026-11-22).
+  dependencies, no lifecycle scripts and `mcpName` against `server.json`, and the node shebang on the first line of the dist (the build now adds it, so `npx mothdex-mcp` starts). The npm name is `mothdex-mcp` (free on npm on 2026-11-22).
 - T-62: opt-in `download_file` tool (tools.md §3, threat model T-60). Registered only with `MOTHDEX_MCP_ENABLE_DOWNLOAD=1`
   and a valid `MOTHDEX_DOWNLOAD_DIR` (deny-lists, re-checked each call and before finalize). Input is `{slug, link_index}`
   only; proxy host only, no redirects, identity encoding, `Content-Length` equal to the link size, abort at size+1; a

@@ -3,14 +3,30 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const read = (path) => JSON.parse(readFileSync(new URL(`../${path}`, import.meta.url), "utf8"));
 const pkg = read("package.json");
 const server = read("server.json");
 const problems = [];
 
-if (pkg.dependencies !== undefined && Object.keys(pkg.dependencies).length > 0) {
-  problems.push("package.json has runtime dependencies: the bundle must be self-contained");
+for (const field of [
+  "dependencies",
+  "optionalDependencies",
+  "peerDependencies",
+  "bundleDependencies",
+  "bundledDependencies",
+]) {
+  const value = pkg[field];
+  if (value !== undefined && Object.keys(value).length > 0) {
+    problems.push(`package.json has ${field}: the bundle must be self-contained`);
+  }
+}
+// The release PR flips this one line on purpose, together with the version bump.
+if (pkg.private !== true) problems.push("package.json private must be true until the release PR");
+const dist = readFileSync(new URL("../dist/mothdex-mcp.mjs", import.meta.url));
+if (!dist.toString("utf8", 0, 32).startsWith("#!/usr/bin/env node\n")) {
+  problems.push("dist/mothdex-mcp.mjs must start with the node shebang (npm links bin as it is)");
 }
 const LIFECYCLE = [
   "preinstall",
@@ -52,7 +68,10 @@ if (mcpb.user_config?.download_dir?.default !== undefined)
 
 const WANT = ["LICENSE", "README.md", "dist/mothdex-mcp.mjs", "package.json"];
 const packed = JSON.parse(
-  execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { encoding: "utf8" }),
+  execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+  }),
 )[0];
 const have = packed.files.map((f) => f.path).sort();
 if (JSON.stringify(have) !== JSON.stringify(WANT))
