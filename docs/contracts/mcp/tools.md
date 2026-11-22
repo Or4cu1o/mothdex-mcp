@@ -12,7 +12,7 @@ Plugin packaging (`.claude-plugin/`, `.mcp.json`, `.mcpb`, `server.json`) is **p
   and `registerPrompt(name, {title, description, argsSchema}, cb)`; the deprecated variadic overloads and raw zod shapes are not used.
 - Transport stdio. Server name `mothdex`, version = package version (kept in sync with `plugin.json`, see plugin.md).
 - The API client follows [`api-client.md`](https://github.com/Or4cu1o/mothdex-cli/blob/main/docs/contracts/cli/api-client.md) (mothdex-cli) **exactly**: the same error kinds (in TypeScript), token bucket at 5 req/s,
-  429 circuit, a check on `info.error` with HTTP 200 (A6), the same fixtures (copied, divergence checked in CI).
+  429 circuit, a check on `info.error` with HTTP 200 (A6), the upstream error-code mapping of api-client §3.1 (T-77), the same fixtures (copied, divergence checked in CI).
   The 429 cooldown lives in memory (the server is long-lived).
 - In-memory LRU cache (≤ 500 items) with the TTLs from [`cache.md`](https://github.com/Or4cu1o/mothdex-cli/blob/main/docs/contracts/cli/cache.md) (mothdex-cli) §1. The server does not share the CLI's disk cache.
 - Every tool declares `inputSchema` and `outputSchema` as `z.object`, so `structuredContent` is type-checked against it. It returns `structuredContent` plus one
@@ -43,7 +43,7 @@ where `code` comes from [`cli-output.md`](https://github.com/Or4cu1o/mothdex-cli
 | `RateLimited`                                        | `rate_limited`                                       | true, with `retry_after_s` when known |
 | `Network`                                            | `network`                                            | true                                  |
 | `Upstream`                                           | `upstream`                                           | true                                  |
-| `API` (unknown `info.error`)                         | `upstream`                                           | false                                 |
+| `API` (unknown code or old-form `info.error`)        | `upstream`                                           | false                                 |
 | `Decode`                                             | `api_incompatible`                                   | false                                 |
 | `Incompatible`                                       | `api_incompatible`                                   | false                                 |
 | `UntrustedRedirect`                                  | `untrusted_redirect`                                 | false                                 |
@@ -53,6 +53,25 @@ where `code` comes from [`cli-output.md`](https://github.com/Or4cu1o/mothdex-cli
 
 A redirect the client refuses (another origin, a scheme change or more than 3 hops; api-client §5.1) is
 `untrusted_redirect` with `retryable: false`, never `network`.
+
+**Upstream error codes (T-77).** The client classifies a response as in api-client §3.1, and the kind then maps to a
+`code` through the table above:
+
+- the HTTP status first;
+- then the exact `info.error` code;
+- an unknown code is `API`;
+- the old message form is kept;
+- `RATE_LIMIT_ERROR` is `rate_limited` with the 429 rules.
+
+The client error also carries the raw upstream code (`code` in TypeScript, `Error.Code` in Go), for the log only.
+
+**The upstream message never reaches the model.** `info.message` (or the old-form `info.error`) is untrusted text, and
+validation messages may echo input:
+
+- `structuredContent.error.message` and the text content carry only the fixed English message of the MCP `code`, the
+  same rule as §3.7;
+- the upstream code and message go only to the stderr log, sanitized like other server text and capped at 200 bytes;
+- the message is never matched or branched on.
 
 ### Shared input fragments
 
