@@ -1,0 +1,33 @@
+{
+  "manifest_version": "0.3",
+  "name": "mothdex-mcp",
+  "display_name": "Mothdex",
+  "version": "0.1.0",
+  "description": "Search the Mothdex game catalog and resolve download links",
+  "author": { "name": "Or4cu1o" },
+  "repository": { "type": "git", "url": "https://github.com/Or4cu1o/mothdex-mcp.git" },
+  "homepage": "https://github.com/Or4cu1o/mothdex-mcp",
+  "license": "GPL-3.0-only",
+  "keywords": ["mcp", "mothdex", "retro", "emulation"],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/mothdex-mcp.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/mothdex-mcp.mjs"],
+      "env": {
+        "MOTHDEX_MCP_ENABLE_DOWNLOAD": "1",
+        "MOTHDEX_DOWNLOAD_DIR": "${user_config.download_dir}"
+      }
+    }
+  },
+  "user_config": {
+    "download_dir": {
+      "type": "directory",
+      "title": "Download folder (enables downloads)",
+      "description": "Setting this enables the download_file tool, which writes only into this folder. Leave empty to keep the server read-only.",
+      "required": false
+    }
+  },
+  "compatibility": { "runtimes": { "node": ">=22" } }
+}
