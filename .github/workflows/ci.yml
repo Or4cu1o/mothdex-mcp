@@ -93,6 +93,8 @@ jobs:
         with:
           persist-credentials: false
       - run: docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 -color
+      - name: Changelog fragments are well formed
+        run: scripts/changelog-fold.sh --check
 
   audit:
     name: audit

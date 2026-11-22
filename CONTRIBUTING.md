@@ -15,7 +15,7 @@ anything large.
 
 ## Pull requests
 
-- Add an entry under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) in the same PR.
+- Add your changelog entry as a fragment `changes/<branch>.md` in the same PR (format in [changes/README.md](changes/README.md)); do not edit [CHANGELOG.md](CHANGELOG.md), the release step folds the fragments into it.
 - Update `README.md` if structure or behavior changes.
 - CI must be green. Do not commit secrets, tokens or `.env` files.
 
