@@ -280,11 +280,17 @@ jobs:
           want=$(awk -v f="$name" '$2 == f { print $1 }' release/checksums.txt)
           [ "$(sha256sum "release/$name" | cut -d' ' -f1)" = "$want" ] || { echo "the tarball changed since it was verified"; exit 1; }
           # a re-run after a publish must not publish again (a version is immutable): only the checks below run (MP-11)
-          if out=$(npm view "mothdex-mcp@${version}" version --registry https://registry.npmjs.org/ 2>&1); then
+          # The exit status of `npm view` is not trusted (versions differ for a version that is not there yet): the version is
+          # published only when the answer is exactly the version; empty or E404 means not published; anything else stops.
+          out=$(npm view "mothdex-mcp@${version}" version --registry https://registry.npmjs.org/ 2>&1) || true
+          if [ "$out" = "$version" ]; then
             echo "mothdex-mcp@${version} is already on npm: not publishing again"
-          else
-            echo "$out" | grep -q 'E404' || { echo "$out"; echo "npm view failed for another reason than 'not found': not publishing"; exit 1; }
+          elif [ -z "$out" ] || printf '%s' "$out" | grep -q 'E404'; then
             npm publish "./release/$name" --provenance --access public --ignore-scripts --registry https://registry.npmjs.org/
+          else
+            echo "$out"
+            echo "npm view answered something else than the version, empty or E404: not publishing"
+            exit 1
           fi
       - name: What npm serves is what was verified (integrity, signatures, provenance)
         env:
@@ -414,20 +420,49 @@ jobs:
           want="sha512-$(openssl dgst -sha512 -binary "release/mothdex-mcp-${version}.tgz" | base64 -w0)"
           got=$(curl -fsS --proto '=https' --tlsv1.2 "https://registry.npmjs.org/mothdex-mcp/${version}" | jq -r .dist.integrity)
           [ "$got" = "$want" ] || { echo "npm serves '$got' for mothdex-mcp@${version}, expected '$want'"; exit 1; }
-      - name: Validate, log in with GitHub OIDC and publish (no retry)
+      - name: Validate the generated server.json
+        run: mcp-publisher validate server.generated.json
+      # Re-entrant like the npm job: a re-run after the registry accepted the version must not send it again (a different
+      # .mcpb hash for the same version is a failure, not an overwrite).
+      - name: Is this version already in the registry?
+        id: state
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          mcp-publisher validate server.generated.json
+          version=${TAG#v}
+          name=$(jq -r .name server.generated.json)
+          enc=$(jq -rn --arg n "$name" '$n | @uri')
+          code=$(curl -sS --proto '=https' --tlsv1.2 -o existing.json -w '%{http_code}' "https://registry.modelcontextprotocol.io/v0/servers/${enc}/versions/${version}")
+          case "$code" in
+            404) echo "present=false" >> "$GITHUB_OUTPUT" ;;
+            200)
+              ours=$(jq -r '.packages[] | select(.registryType == "mcpb") | .fileSha256' server.generated.json)
+              theirs=$(jq -r '[.server.packages[]? | select(.registryType == "mcpb") | .fileSha256] | first // empty' existing.json)
+              if [ -z "$theirs" ] || [ "$ours" != "$theirs" ]; then echo "the registry already has $name $version with another .mcpb hash ('$theirs', ours '$ours'): stopping"; exit 1; fi
+              echo "present=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "the registry answered HTTP $code: stopping"; exit 1 ;;
+          esac
+      - name: Log in with GitHub OIDC and publish (no retry)
+        if: steps.state.outputs.present != 'true'
+        run: |
+          set -euo pipefail
           mcp-publisher login github-oidc
           mcp-publisher publish server.generated.json | tee publish.out
+      - name: Summary
+        if: always() && steps.state.outcome == 'success'
+        run: |
           {
             echo "### MCP registry"
-            echo "Sent:"
+            if [ "${{ steps.state.outputs.present }}" = "true" ]; then echo "Already in the registry with the same .mcpb hash: nothing sent."; fi
+            echo "server.json:"
             printf '%s\n' '```json'
             cat server.generated.json
             printf '%s\n' '```'
-            echo "Registry answer:"
-            printf '%s\n' '```'
-            cat publish.out
-            printf '%s\n' '```'
+            if [ -f publish.out ]; then
+              echo "Registry answer:"
+              printf '%s\n' '```'
+              cat publish.out
+              printf '%s\n' '```'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

@@ -108,13 +108,15 @@ Prepared at main `bf994da`. **OWNER OK** marks a settings change, the tag or a p
 5. **Verify the published release** (empty directory):
 
    ```sh
-   gh release download v0.1.0 --repo Or4cu1o/mothdex-mcp          # expect 3 files: mothdex-mcp_0.1.0.mjs, mothdex-mcp_0.1.0.mcpb, checksums.txt
+   gh release download v0.1.0 --repo Or4cu1o/mothdex-mcp          # expect 5 files: mothdex-mcp_0.1.0.mjs, mothdex-mcp_0.1.0.mcpb, mothdex-mcp-0.1.0.tgz, server.json, checksums.txt
    sha256sum --check --strict checksums.txt
    gh attestation verify checksums.txt --repo Or4cu1o/mothdex-mcp \
      --signer-workflow Or4cu1o/mothdex-mcp/.github/workflows/release.yml --source-ref refs/tags/v0.1.0 \
      --source-digest <full sha of the tag commit> --deny-self-hosted-runners
    gh attestation verify mothdex-mcp_0.1.0.mjs  # same flags
    gh attestation verify mothdex-mcp_0.1.0.mcpb  # same flags
+   gh attestation verify mothdex-mcp-0.1.0.tgz  # same flags
+   gh attestation verify server.json  # same flags
    cmp mothdex-mcp_0.1.0.mjs <(git show v0.1.0:dist/mothdex-mcp.mjs)   # in a clone: asset == committed dist
    cmp <(unzip -p mothdex-mcp_0.1.0.mcpb dist/mothdex-mcp.mjs) mothdex-mcp_0.1.0.mjs   # the bundle inside the .mcpb is the asset
    ```
@@ -128,6 +130,18 @@ Prepared at main `bf994da`. **OWNER OK** marks a settings change, the tag or a p
    `v0.1.0`. Published but wrong: `gh release edit v0.1.0 --prerelease`, point the marketplace pin back to the last good
    tag (or remove the plugin entry) in a PR, ship `v0.1.1`; deleting a release or tag needs the owner's OK. No long-lived
    secrets are involved (OIDC), so there is nothing to rotate.
+
+   **A partial publish** (the GitHub release and npm are done, the registry failed, or the other way round):
+   - Use **Re-run failed jobs** in the Actions run. It runs the failed job again on the same `release-files` artifact; the
+     jobs that passed stay passed. Re-running `npm` is safe anyway (it asks `npm view` first and never publishes twice), and
+     `registry` is re-entrant the same way: it reads the registry for this name and version and, if the entry is already there
+     with the same `.mcpb` hash, sends nothing.
+   - **Never "Re-run all jobs".** `build` would pack the `.mcpb` again (the container is not reproducible, so it gets a new
+     SHA-256), `attest` would add new attestations and `publish` would fail on the release that already exists.
+   - The artifact is kept for 7 days (`retention-days: 7`). After that the missing step cannot be completed for that tag: the
+     recovery is a new patch tag, with npm and the registry from scratch (a published npm version is immutable).
+   - If the registry accepted the version but the job failed afterwards, the re-run reads the entry and skips the publish when
+     the hash matches, and stops when it does not (an entry with another hash for the same version needs the owner).
 
 Verified while preparing this: `actionlint` (pinned image) clean; `release.yml` read against these steps. **Not
 verified:** any real tag run (`gh attestation verify`, the tag-to-commit check, `--verify-tag`, the environment approval), and
@@ -219,6 +233,10 @@ For **phase B**, only when the owner decides to publish (O-1 to O-8 of the threa
    `mothdex-mcp` only and the shortest expiry, deleted the same day. If npm allows a trusted publisher before the first version
    (not verified), this token step is dropped. A placeholder version is not recommended: it would be the one version without
    provenance.
+   After the manual first publish, re-run the failed `npm` job of the tag run (**Re-run failed jobs**): it only verifies what npm
+   serves, and then the `registry` job runs for the first version. The manual publish uses `npm login --auth-type=web` (two-factor
+   authentication), `npm publish ./mothdex-mcp-X.Y.Z.tgz --access public --ignore-scripts --registry https://registry.npmjs.org/ --otp <code>`
+   and `npm logout`; a granular token, if used instead, goes in a temporary userconfig file, never on the command line.
 3. **O-3:** on the package, a **trusted publisher**: repository `Or4cu1o/mothdex-mcp`, workflow `release.yml`, **environment `release`**;
    then "Require two-factor authentication and disallow tokens".
 4. **O-4:** GitHub environment `release`: required reviewer (the owner), deployment policy **selected tags `v*` only** (no
@@ -238,7 +256,12 @@ For **phase B**, only when the owner decides to publish (O-1 to O-8 of the threa
 
 - Provenance and signatures prove where a version came from, not that its dependencies were benign: the controls stay the lockfile,
   `--ignore-scripts`, `dist == build(src)` and the reviews.
-- The registry namespace may be owner-wide (see O-8).
+- The registry namespace may be owner-wide (see O-8). Also, the `github-oidc` login of the registry cannot be bound to a GitHub
+  environment: the `npm` job (environment `release`) and `attest` could mint a registry token too, so only npm is protected by an
+  environment binding; the registry side rests on the tag trigger, the environment `mcp-registry` of its own job, the reviews of
+  `release.yml` and the pinned tools.
+- `actions/setup-node` downloads Node 26.13.1 over TLS without checking it against the signed SHASUMS256 of nodejs.org, so the
+  pinned npm 11.20.0 rests on that download; accepted as a residual (the npm version is asserted, not its origin).
 - With one person (D28 1c) a stolen owner session can tag and approve; the tag ruleset, the tag-to-commit check and the attestation
   checks limit what it can do outside the workflow, not inside it.
 - npm and the MCP registry are third parties and the MCP registry is in preview: the checks verify what was published, not its

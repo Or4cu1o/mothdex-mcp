@@ -200,6 +200,13 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
                 proc.returncode == 0,
                 "mcp-publisher validate accepts the generated server.json" + ("" if proc.returncode == 0 else f"\n{proc.stdout}{proc.stderr}"),
             )
+            # the registry read the re-entrance relies on: this version is not there yet, so the answer is 404 and present=false
+            out_file = os.path.join(work, "github_output")
+            open(out_file, "w", encoding="utf-8").close()
+            rc, out = run_step(workflow, "registry", "Is this version already in the registry?", work, dict(env, GITHUB_OUTPUT=out_file))
+            with open(out_file, encoding="utf-8") as f:
+                state = f.read().strip()
+            check(rc == 0 and state == "present=false", "the registry read says this version is not published yet (HTTP 404)" + ("" if rc == 0 else f"\n{out}"))
 
 if failures:
     sys.exit(f"exercise-release-steps: {len(failures)} check(s) failed")
