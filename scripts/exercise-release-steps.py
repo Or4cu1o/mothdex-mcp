@@ -140,6 +140,27 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
             f.write("x")
 
     variant("an extra member", add_member)
+    # QA: every rule of the jq filter and of the member checks gets a case of its own
+    variant("another package name", edit_package_json(name="mothdex-mcp-other"))
+    variant("another bin", edit_package_json(bin={"mothdex-mcp": "dist/other.mjs"}))
+    variant("an optional dependency", edit_package_json(optionalDependencies={"left-pad": "1.3.0"}))
+    variant("a peer dependency", edit_package_json(peerDependencies={"left-pad": "1.3.0"}))
+    variant("bundled dependencies", edit_package_json(bundleDependencies=["left-pad"]))
+    variant("a prepare script", edit_package_json(scripts={"prepare": "node -e 0"}))
+    variant("a prepublishOnly script", edit_package_json(scripts={"prepublishOnly": "node -e 0"}))
+    variant("an install script", edit_package_json(scripts={"install": "node -e 0"}))
+
+    def link_license(tmp):  # an allowed name, but a link: only the check by type can see it
+        path = os.path.join(tmp, "package", "LICENSE")
+        os.remove(path)
+        os.symlink("/etc/passwd", path)
+
+    variant("an allowed member that is a symbolic link", link_license)
+
+    def drop_license(tmp):
+        os.remove(os.path.join(tmp, "package", "LICENSE"))
+
+    variant("a missing LICENSE", drop_license)
 
     def change_bundle(tmp):
         with open(os.path.join(tmp, "package", "dist", "mothdex-mcp.mjs"), "a", encoding="utf-8") as f:
@@ -172,6 +193,25 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
             mcpb.get("environmentVariables") == sj["packages"][0].get("environmentVariables"),
             "the mcpb entry has the same environment variables as the npm one",
         )
+    # QA: each rule of the server.json filter gets a case; the committed file is changed one field at a time
+    with open(os.path.join(ROOT, "server.json"), encoding="utf-8") as f:
+        committed = json.load(f)
+    with open(os.path.join(release, "checksums.txt"), "w", encoding="utf-8") as f:
+        f.write(f"{mcpb_sha}  mothdex-mcp_{version}.mcpb\n")
+
+    def server_case(label, change):
+        sj2 = json.loads(json.dumps(committed))
+        change(sj2)
+        with open(os.path.join(release, "server.json"), "w", encoding="utf-8") as f:
+            json.dump(sj2, f)
+        rc2, _ = run_step(workflow, "registry", GENERATE, work, env)
+        check(rc2 != 0, f"server.json refused: {label}")
+
+    server_case("a name that is not the package's mcpName", lambda d: d.update(name="io.github.someone/else"))
+    server_case("a version that is not the tag's", lambda d: d.update(version="9.9.9"))
+    server_case("an npm version that is not the tag's", lambda d: d["packages"][0].update(version="9.9.9"))
+    server_case("another npm package name", lambda d: d["packages"][0].update(identifier="another-package"))
+    server_case("another repository", lambda d: d["repository"].update(url="https://github.com/someone/else"))
     # a server.json that is not the npm-only entry must be refused
     with open(os.path.join(ROOT, "server.json"), encoding="utf-8") as f:
         base = json.load(f)
