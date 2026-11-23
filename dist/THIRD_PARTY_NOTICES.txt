@@ -4,7 +4,7 @@ The bundle includes the packages below. mothdex-mcp itself is GPL-3.0-only (see 
 
 ==============================================================================
 @modelcontextprotocol/core@2.4.0
-License: Apache-2.0
+License (as declared in package.json): Apache-2.0
 Source: git+https://github.com/modelcontextprotocol/typescript-sdk.git
 
 --- LICENSE ---
@@ -228,7 +228,7 @@ the full license text.
 
 ==============================================================================
 @modelcontextprotocol/server@2.4.0
-License: Apache-2.0
+License (as declared in package.json): Apache-2.0
 Source: git+https://github.com/modelcontextprotocol/typescript-sdk.git
 
 --- LICENSE ---
@@ -452,7 +452,7 @@ the full license text.
 
 ==============================================================================
 zod@4.6.7
-License: MIT
+License (as declared in package.json): MIT
 Source: git+https://github.com/colinhacks/zod.git
 
 --- LICENSE ---

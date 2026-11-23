@@ -44,7 +44,11 @@ export function buildNotices(metafile, cwd) {
   ];
   for (const p of packages) {
     const url = typeof p.repository === "string" ? p.repository : p.repository?.url;
-    lines.push("=".repeat(78), `${p.name}@${p.version}`, `License: ${p.license ?? "see below"}`);
+    lines.push(
+      "=".repeat(78),
+      `${p.name}@${p.version}`,
+      `License (as declared in package.json): ${p.license ?? "see below"}`,
+    );
     if (url) lines.push(`Source: ${url}`);
     for (const file of p.files) {
       lines.push("", `--- ${file} ---`, "", readFileSync(join(p.root, file), "utf8").trim());

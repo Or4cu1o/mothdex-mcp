@@ -77,7 +77,7 @@ jobs:
         run: |
           if [ -n "$(git status --porcelain -- dist)" ]; then
             git status --short -- dist
-            echo "dist/ is not the build of src: run 'pnpm build' and commit dist/mothdex-mcp.mjs" >&2
+            echo "dist/ is not the build of src: run 'pnpm build' and commit dist/ (the bundle and THIRD_PARTY_NOTICES.txt)" >&2
             exit 1
           fi
       - name: The npm package is what plugin.md 5.2 allows
