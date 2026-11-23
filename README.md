@@ -88,6 +88,14 @@ node dist/mothdex-mcp.mjs   # speaks MCP on stdin/stdout; --version prints the v
 [mothdex-cli](https://github.com/Or4cu1o/mothdex-cli); `pnpm check:fixtures` (and CI) fails when they diverge, and
 `node scripts/check-fixtures.mjs --update` refreshes the copy.
 
+## Report a problem or an idea
+
+- [Report a bug](https://github.com/Or4cu1o/mothdex-mcp/issues/new?template=bug_report.yml)
+- [Suggest a feature](https://github.com/Or4cu1o/mothdex-mcp/issues/new?template=feature_request.yml)
+- Testing Mothdex on a handheld or a retro-gaming system? See the
+  [beta testing guide](https://github.com/Or4cu1o/mothdex-cli/blob/main/docs/beta-testing.md) and the
+  [device report form](https://github.com/Or4cu1o/mothdex-cli/issues/new?template=device_report.yml).
+
 ## Contributing and security
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
