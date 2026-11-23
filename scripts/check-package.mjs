@@ -98,6 +98,10 @@ const printed = execFileSync(process.execPath, [distPath, "--version"], {
 }).trim();
 if (printed !== `mothdex-mcp ${pkg.version}`)
   problems.push(`dist --version printed "${printed}", want "mothdex-mcp ${pkg.version}"`);
+// The bundle embeds only the name and the version of package.json, never `scripts` or `devDependencies`.
+const bundled = readFileSync(distPath, "utf8");
+if (/\bdevDependencies\b/.test(bundled))
+  problems.push("dist embeds package.json devDependencies: only name and version may be bundled");
 console.log(`dist sha256 ${createHash("sha256").update(dist).digest("hex")}`);
 
 if (problems.length > 0) {

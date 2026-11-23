@@ -341,6 +341,8 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
     icon_case("a file that is not a PNG", b"GIF89a" + icon_good[6:], False)
     icon_case("a PNG whose first chunk is not IHDR", icon_good[:12] + b"IDAT" + icon_good[16:], False)
     icon_case("a PNG of another size", icon_good[:16] + (256).to_bytes(4, "big") + icon_good[20:], False)
+    icon_case("a PNG of the right width and height 256", icon_good[:20] + (256).to_bytes(4, "big") + icon_good[24:], False)
+    icon_case("a file shorter than 24 bytes (readable message, no stack trace)", icon_good[:23], False)
 
     private_case("private true", True, False, True)
     private_case("private false with the version in the changelog (the release PR)", False, True, True)
