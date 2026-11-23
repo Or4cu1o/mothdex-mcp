@@ -1,7 +1,7 @@
 {
   "name": "mothdex",
   "displayName": "Mothdex",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Search the Mothdex game catalog and resolve download links",
   "author": { "name": "Or4cu1o" },
   "homepage": "https://github.com/Or4cu1o/mothdex-mcp",
