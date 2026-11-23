@@ -211,7 +211,7 @@ name is the unscoped `mothdex-mcp`), D28 1c (the owner identity, no bot).
    `npm pack` and no `npm publish .` in this job (MP-4).
 6. Before publishing, `npm view mothdex-mcp@<version>`: if the version exists, only the checks of step 7 run (a re-run must not
    publish again). There is no retry around the publish (MP-11).
-7. After publishing, with the same config: `npm view mothdex-mcp@<version> dist.integrity` equals the SHA-512 of the verified
+7. After publishing, with the same config (npm can take minutes to serve a new version after it answers 202, so the step polls `npm view` every 10 s for up to about 10 minutes before it gives up; the v0.1.1 run gave up after 2 minutes and needed "Re-run failed jobs"): `npm view mothdex-mcp@<version> dist.integrity` equals the SHA-512 of the verified
    tarball; in an empty directory `npm install mothdex-mcp@<version> --ignore-scripts` followed by `npm audit signatures` passes; the
    provenance attestation of that version names repository `Or4cu1o/mothdex-mcp`, workflow `release.yml` and ref
    `refs/tags/<tag>` when npm exposes a stable way to read it (MP-12).
