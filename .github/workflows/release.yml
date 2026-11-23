@@ -190,7 +190,7 @@ jobs:
     # a pre-release tag (vX.Y.Z-rc.1) is a GitHub pre-release only: npm would need --tag for it and the registry lists stable versions
     if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     environment: release
     permissions:
       contents: read # the tag-to-commit check reads the repository ref
@@ -313,7 +313,8 @@ jobs:
           name="mothdex-mcp-${version}.tgz"
           want="sha512-$(openssl dgst -sha512 -binary "release/$name" | base64 -w0)"
           got=""
-          for _ in $(seq 1 12); do
+          # npm answers 202 and can take minutes to serve a new version (integrity empty until then): wait up to ~10 minutes
+          for _ in $(seq 1 60); do
             got=$(npm view "mothdex-mcp@${version}" dist.integrity --registry https://registry.npmjs.org/ 2>/dev/null || true)
             [ -n "$got" ] && break
             sleep 10
