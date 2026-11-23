@@ -6,11 +6,11 @@ The release is a tag. Nothing here runs until the owner creates a `v*` tag; no w
 
 - `mothdex-mcp_<version>.mjs`: the single-file server bundle. Byte for byte the same as the committed
   `dist/mothdex-mcp.mjs` at the tag (the build job fails otherwise).
-- `mothdex-mcp_<version>.mcpb`: the MCP Bundle for clients that install `.mcpb` files. It holds exactly three files, the
-  `manifest.json` (`mcpb/manifest.json`), `icon.png` (`mcpb/icon.png`, the 512x512 project-owned art approved in D30) and
-  `dist/mothdex-mcp.mjs`, all three byte for byte the committed ones; the exact-list check is in `scripts/pack-mcpb.sh`.
+- `mothdex-mcp_<version>.mcpb`: the MCP Bundle for clients that install `.mcpb` files. It holds exactly four files, the
+  `manifest.json` (`mcpb/manifest.json`), `icon.png` (`mcpb/icon.png`, the 512x512 project-owned art approved in D30),
+  `dist/mothdex-mcp.mjs` and `dist/THIRD_PARTY_NOTICES.txt` (the licences of the packages inlined in the bundle), all four byte for byte the committed ones; the exact-list check is in `scripts/pack-mcpb.sh`.
   The container is **not reproducible**: `mcpb pack` stamps the time of packing in the zip, so two packs of the same files differ. Integrity rests on
-  the attestation of the packed file and on the byte-for-byte check of its three members against the committed files.
+  the attestation of the packed file and on the byte-for-byte check of its four members against the committed files.
 - `mothdex-mcp-<version>.tgz`: the npm tarball, made once in the build job (`npm pack --ignore-scripts`) and published to npm by the
   `npm` job as it is. `server.json`: the committed MCP registry file, which the `registry` job extends with the `.mcpb` entry.
 - `checksums.txt` (SHA-256 of all four files), and a GitHub build-provenance attestation for each of them and for `checksums.txt`.
@@ -205,7 +205,7 @@ name is the unscoped `mothdex-mcp`), D28 1c (the owner identity, no bot).
    (MP-6).
 4. Inside the tarball (read with `tar`, never extracted into a path npm reads): `private: false`, the tag's version, the expected
    `mcpName` and `bin`, no lifecycle `scripts`, no `dependencies`, `optionalDependencies`, `peerDependencies` or `bundleDependencies`,
-   exactly the four files `scripts/check-package.mjs` allows, and the SHA-256 of `dist/mothdex-mcp.mjs` equal to the attested `.mjs`.
+   exactly the five files `scripts/check-package.mjs` allows, and the SHA-256 of `dist/mothdex-mcp.mjs` equal to the attested `.mjs`.
 5. In the same step as the publish, the tarball's SHA-256 is compared once more with its `checksums.txt` line, then
    `npm publish <path-to-the-tgz> --provenance --access public --ignore-scripts` with no token in the environment. There is no
    `npm pack` and no `npm publish .` in this job (MP-4).

@@ -25,6 +25,7 @@ mothdex-mcp/
   .claude-plugin/marketplace.json
   .mcp.json
   dist/mothdex-mcp.mjs        # release artifact, committed; CI checks dist == build(src) (T-34)
+  dist/THIRD_PARTY_NOTICES.txt # licences of the packages inlined in the bundle, written by the build
                               # marketplace.json: source "./" before the first release, github ref+sha after (§1)
   skills/mothdex/SKILL.md     # model-invoked: how to pick an entry and a link
   skills/search/SKILL.md      # user-invocable: /mothdex:search <query>
@@ -163,7 +164,9 @@ For a manual `claude mcp add` or another client, the user sets both variables. T
 
 - `private: false`, `name: "<npm-name>"`, `mcpName: "io.github.Or4cu1o/mothdex-mcp"`;
 - `bin: {"mothdex-mcp": "dist/mothdex-mcp.mjs"}`;
-- `files: ["dist/mothdex-mcp.mjs", "README.md", "LICENSE"]`.
+- `files: ["dist/mothdex-mcp.mjs", "dist/THIRD_PARTY_NOTICES.txt", "README.md", "LICENSE"]`.
+
+**Third-party notices:** the bundle inlines `zod` (MIT) and `@modelcontextprotocol/server` and `core` (Apache-2.0), whose licences require their notices to travel with the bundle. `pnpm build` writes `dist/THIRD_PARTY_NOTICES.txt` from the esbuild metafile (the exact list of inlined packages, each with its full licence text and NOTICE file when it has one) and fails when an inlined package has no licence file. The file is committed beside the bundle (so `dist == build(src)` covers it), ships in the npm tarball and in the `.mcpb`, and is in the plugin dist because the plugin is the repository; `check:package` fails when a package inlined in the bundle has no licence in it.
 
 **No runtime `dependencies`:** the bundle is self-contained, so `@modelcontextprotocol/server` and `zod` move to `devDependencies`.
 
@@ -171,7 +174,7 @@ For a manual `claude mcp add` or another client, the user sets both variables. T
 
 **CI check** (every PR and release):
 
-1. `npm pack --dry-run --json` lists exactly the three files, plus `package.json`.
+1. `npm pack --dry-run --json` lists exactly the four files (bundle, notices, README, LICENSE), plus `package.json`.
 2. The packed `dist/mothdex-mcp.mjs` SHA-256 equals the committed, attested asset.
 3. `package.json` has no `dependencies` and no lifecycle script.
 
@@ -191,7 +194,7 @@ The order is fixed, and each step verifies the previous one's hash:
 1. **`build`:**
    - the bundle, as today;
    - the `.mcpb` packed from the committed dist with a pinned `@anthropic-ai/mcpb`: exact version, installed with `--ignore-scripts`, never `npx` latest;
-   - `unzip -l` must list exactly `manifest.json`, `icon.png` and `dist/mothdex-mcp.mjs`, all three byte for byte the committed files (`mcpb/manifest.json`, `mcpb/icon.png`, `dist/mothdex-mcp.mjs`; `scripts/pack-mcpb.sh`). The icon is the 512x512 project-owned PNG approved in D30, referenced by the manifest as `icon.png`;
+   - `unzip -l` must list exactly `manifest.json`, `icon.png`, `dist/mothdex-mcp.mjs` and `dist/THIRD_PARTY_NOTICES.txt`, all four byte for byte the committed files (`mcpb/manifest.json`, `mcpb/icon.png`, `dist/mothdex-mcp.mjs`, `dist/THIRD_PARTY_NOTICES.txt`; `scripts/pack-mcpb.sh`). The icon is the 512x512 project-owned PNG approved in D30, referenced by the manifest as `icon.png`;
    - `mcpb validate` passes;
    - the `.mcpb` goes into `checksums.txt`;
    - the npm tarball `mothdex-mcp-<version>.tgz` is made here once (`npm pack --ignore-scripts` on the clean tree) and the committed

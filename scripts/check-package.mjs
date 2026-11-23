@@ -81,7 +81,13 @@ if (mcpb.icon !== "icon.png")
   problems.push('mcpb/manifest.json must reference the icon as "icon.png"');
 problems.push(...iconProblems(fileURLToPath(new URL("../mcpb/icon.png", import.meta.url))));
 
-const WANT = ["LICENSE", "README.md", "dist/mothdex-mcp.mjs", "package.json"];
+const WANT = [
+  "LICENSE",
+  "README.md",
+  "dist/THIRD_PARTY_NOTICES.txt",
+  "dist/mothdex-mcp.mjs",
+  "package.json",
+];
 const packed = JSON.parse(
   execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], {
     cwd: fileURLToPath(new URL("..", import.meta.url)),
@@ -102,6 +108,25 @@ if (printed !== `mothdex-mcp ${pkg.version}`)
 const bundled = readFileSync(distPath, "utf8");
 if (/\bdevDependencies\b/.test(bundled))
   problems.push("dist embeds package.json devDependencies: only name and version may be bundled");
+// Every package the bundle inlines has its licence in dist/THIRD_PARTY_NOTICES.txt (esbuild marks each module of the bundle
+// with a `// node_modules/...` comment; the list is read from the bundle itself, not from the build script).
+const inlined = new Set(
+  [...bundled.matchAll(/^\/\/ node_modules\/.*$/gm)].flatMap(([line]) => {
+    const names = [...line.matchAll(/node_modules\/((?:@[^/]+\/)?[^/]+)\//g)];
+    return names.length > 0 ? [names.at(-1)[1]] : [];
+  }),
+);
+const notices = readFileSync(new URL("../dist/THIRD_PARTY_NOTICES.txt", import.meta.url), "utf8");
+if (inlined.size === 0)
+  problems.push("no inlined package found in the bundle: the notices check is blind");
+for (const name of inlined) {
+  const start = notices.indexOf(`\n${"=".repeat(78)}\n${name}@`);
+  const section = start < 0 ? "" : notices.slice(start + 1).split(`\n${"=".repeat(78)}\n`)[0];
+  if (!/^--- (licen[cs]e|copying)\S* ---$/im.test(section))
+    problems.push(
+      `${name} is inlined in the bundle but dist/THIRD_PARTY_NOTICES.txt has no licence for it`,
+    );
+}
 console.log(`dist sha256 ${createHash("sha256").update(dist).digest("hex")}`);
 
 if (problems.length > 0) {
