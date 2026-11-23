@@ -1,7 +1,36 @@
 name: Bug report
 description: Something does not work as documented
-labels: [bug]
+labels: [bug, needs-triage]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. A few details help us reproduce it quickly.
+        For a vulnerability, please use the private security advisory link on the previous page instead.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of mothdex-mcp is affected?
+      options:
+        - MCP server
+        - Claude Code plugin
+        - .mcpb (Claude Desktop extension)
+        - npm package
+    validations:
+      required: true
+  - type: dropdown
+    id: installed-with
+    attributes:
+      label: How did you install it?
+      options:
+        - npm / npx
+        - Claude Code plugin marketplace
+        - .mcpb file
+        - From source
+        - Other
+    validations:
+      required: true
   - type: textarea
     id: what
     attributes:
@@ -19,19 +48,21 @@ body:
     id: version
     attributes:
       label: Version
-      description: Output of `node dist/mothdex-mcp.mjs` (version line) or the package version.
+      description: Output of `npx mothdex-mcp --version`, or the server name and version your MCP client shows in its server info.
+      placeholder: mothdex-mcp 0.1.0
     validations:
       required: true
   - type: input
     id: system
     attributes:
-      label: Operating system and architecture
-      description: For example Windows 11 x64, macOS 26 arm64, Debian 13 x64; include the MCP client (Claude Desktop, Claude Code, Cursor...).
+      label: System and device
+      description: Operating system, architecture and device. Also name the MCP client (Claude Desktop, Claude Code, Cursor...).
+      placeholder: Windows 11 x64, Claude Desktop
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
       label: Output or logs
-      description: Remove any personal paths or tokens before pasting.
+      description: Remove personal paths and tokens before pasting.
       render: shell

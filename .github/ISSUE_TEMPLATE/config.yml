@@ -1,5 +1,11 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Questions and help
+    url: https://github.com/Or4cu1o/mothdex-mcp/discussions/categories/q-a
+    about: Ask how something works in Discussions (Q&A).
   - name: Security vulnerability
     url: https://github.com/Or4cu1o/mothdex-mcp/security/advisories/new
     about: Report vulnerabilities privately; do not open a public issue.
+  - name: Mothdex website
+    url: https://mothdex.net
+    about: News, downloads and documentation.
