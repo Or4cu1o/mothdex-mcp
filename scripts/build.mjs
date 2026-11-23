@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { build } from "esbuild";
+import { buildNotices } from "./third-party-notices.mjs";
 
 // `src` reads package.json for the version. Bundled as is, the file would drag `scripts`, `devDependencies` and the rest
 // into the published bundle: embed only these two fields.
@@ -16,7 +17,7 @@ const embedNameAndVersion = {
   },
 };
 
-await build({
+const result = await build({
   entryPoints: ["src/index.ts"],
   outfile: "dist/mothdex-mcp.mjs",
   bundle: true,
@@ -27,5 +28,9 @@ await build({
   banner: { js: "#!/usr/bin/env node" },
   sourcemap: false,
   plugins: [embedNameAndVersion],
+  metafile: true,
   logLevel: "info",
 });
+
+// The licences of the inlined packages travel with the bundle (npm tarball, .mcpb, plugin dist).
+writeFileSync("dist/THIRD_PARTY_NOTICES.txt", buildNotices(result.metafile, process.cwd()));

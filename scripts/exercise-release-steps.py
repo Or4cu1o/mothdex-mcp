@@ -299,14 +299,17 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
         clean("an NPM_TOKEN", {"NPM_TOKEN": "x"}, False)
 
     # package.json private: true is the default; false only when CHANGELOG.md has the section of this version (QA, Crivo)
-    def private_case(label, private, changelog_heading, expect_ok):
+    def private_case(label, private, changelog_heading, expect_ok, notices=None):
         tree = os.path.join(work, "tree")
         if os.path.exists(tree):
             shutil.rmtree(tree)
-        for rel in ("package.json", "server.json", "README.md", "LICENSE", os.path.join("mcpb", "manifest.json"), os.path.join("mcpb", "icon.png"), os.path.join("dist", "mothdex-mcp.mjs"), os.path.join("scripts", "check-icon.mjs"), os.path.join("scripts", "check-icon.mjs"),
+        for rel in ("package.json", "server.json", "README.md", "LICENSE", os.path.join("mcpb", "manifest.json"), os.path.join("mcpb", "icon.png"), os.path.join("dist", "mothdex-mcp.mjs"), os.path.join("dist", "THIRD_PARTY_NOTICES.txt"), os.path.join("scripts", "check-icon.mjs"), os.path.join("scripts", "check-icon.mjs"),
                     os.path.join("scripts", "check-package.mjs")):
             os.makedirs(os.path.dirname(os.path.join(tree, rel)), exist_ok=True)
             shutil.copy(os.path.join(ROOT, rel), os.path.join(tree, rel))
+        if notices is not None:
+            with open(os.path.join(tree, "dist", "THIRD_PARTY_NOTICES.txt"), "w", encoding="utf-8") as f:
+                f.write(notices)
         with open(os.path.join(tree, "package.json"), encoding="utf-8") as f:
             pj = json.load(f)
         pj["private"] = private
@@ -348,6 +351,11 @@ with tempfile.TemporaryDirectory(prefix="release-steps.") as work:
     private_case("private false with the version in the changelog (the release PR)", False, True, True)
     private_case("private false without the version in the changelog", False, False, False)
     private_case("private as the text 'false', with the version in the changelog", "false", True, False)
+    # every inlined package needs its licence in dist/THIRD_PARTY_NOTICES.txt
+    notices_text = open(os.path.join(ROOT, "dist", "THIRD_PARTY_NOTICES.txt"), encoding="utf-8").read()
+    zod_start = notices_text.index("\n" + "=" * 78 + "\nzod@")
+    private_case("a notices file without the licence of zod", True, False, False, notices=notices_text[:zod_start + 1])
+    private_case("an empty notices file", True, False, False, notices="")
 
     # QA: the npm publish guard and the registry re-entry, run with fake `npm` and `curl` programs first on PATH. The real
     # programs are never called, so nothing here touches the network or a registry, and the result does not depend on whether

@@ -78,7 +78,7 @@ jobs:
         run: |
           mkdir release
           cp dist/mothdex-mcp.mjs "release/mothdex-mcp_${TAG#v}.mjs"
-          # validates the manifest, packs, lists the members (exactly three: manifest, icon, bundle), compares them with the committed files and
+          # validates the manifest, packs, lists the members (exactly four: manifest, icon, bundle, third-party notices), compares them with the committed files and
           # smokes the bundle inside the archive; the version in the file name is package.json's, which equals the tag
           scripts/pack-mcpb.sh release
           # the npm tarball is made here, once, from the clean tree, and attested like the other files; the npm job publishes
@@ -272,8 +272,8 @@ jobs:
             and ([(.scripts // {}) | keys[] | select(test("^(pre|post)?(install|prepare|publish|pack|prepublishOnly|prepublish)$"))] == [])' >/dev/null \
             || { echo "package.json inside the tarball is not what the release publishes (private must be false, version the tag's, no lifecycle scripts or dependencies)"; exit 1; }
           members=$(tar -tzf "$tgz" | LC_ALL=C sort)
-          want=$(printf '%s\n' package/LICENSE package/README.md package/dist/mothdex-mcp.mjs package/package.json | LC_ALL=C sort)
-          [ "$members" = "$want" ] || { echo "the tarball members differ from the four allowed files"; diff <(echo "$want") <(echo "$members") || true; exit 1; }
+          want=$(printf '%s\n' package/LICENSE package/README.md package/dist/THIRD_PARTY_NOTICES.txt package/dist/mothdex-mcp.mjs package/package.json | LC_ALL=C sort)
+          [ "$members" = "$want" ] || { echo "the tarball members differ from the five allowed files"; diff <(echo "$want") <(echo "$members") || true; exit 1; }
           if tar -tvzf "$tgz" | cut -c1 | grep -v '^-' >/dev/null; then echo "the tarball has a member that is not a regular file"; exit 1; fi
           inner=$(tar -xzOf "$tgz" package/dist/mothdex-mcp.mjs | sha256sum | cut -d' ' -f1)
           asset=$(sha256sum "release/mothdex-mcp_${version}.mjs" | cut -d' ' -f1)

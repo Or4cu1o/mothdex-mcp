@@ -16,6 +16,7 @@ for tool in node pnpm unzip cmp sha256sum; do command -v "$tool" >/dev/null 2>&1
 [ -n "${1:-}" ] || fail "usage: $0 <out-dir>"
 [ -d tools/mcpb/node_modules/@anthropic-ai/mcpb ] || fail "the mcpb CLI is not installed: pnpm --dir tools/mcpb install --frozen-lockfile --ignore-scripts"
 [ -f dist/mothdex-mcp.mjs ] || fail "dist/mothdex-mcp.mjs not found: run pnpm build"
+[ -f dist/THIRD_PARTY_NOTICES.txt ] || fail "dist/THIRD_PARTY_NOTICES.txt not found: run pnpm build"
 mkdir -p "$1"
 out=$(cd "$1" && pwd)
 version=$(node -p "require('./package.json').version")
@@ -50,14 +51,15 @@ mkdir -p "$work/stage/dist"
 cp mcpb/manifest.json "$work/stage/manifest.json"
 cp mcpb/icon.png "$work/stage/icon.png"
 cp dist/mothdex-mcp.mjs "$work/stage/dist/mothdex-mcp.mjs"
+cp dist/THIRD_PARTY_NOTICES.txt "$work/stage/dist/THIRD_PARTY_NOTICES.txt"
 
 mcpb validate "$work/stage/manifest.json"
 mcpb pack "$work/stage" "$file"
 
-# The archive holds exactly the manifest, the icon and the bundle: no other file, no folder entry, nothing from the repository.
+# The archive holds exactly the manifest, the icon, the bundle and its third-party notices: no other file, no folder entry, nothing from the repository.
 got=$(unzip -Z1 "$file" | sort)
-want=$(printf '%s\n' dist/mothdex-mcp.mjs icon.png manifest.json)
-[ "$got" = "$want" ] || fail "the .mcpb members differ from the expected three:
+want=$(printf '%s\n' dist/THIRD_PARTY_NOTICES.txt dist/mothdex-mcp.mjs icon.png manifest.json | sort)
+[ "$got" = "$want" ] || fail "the .mcpb members differ from the expected four:
 $(diff <(echo "$want") <(echo "$got") || true)"
 # By type too: a symlink or a device in the archive would show up in the unix mode of its entry.
 if unzip -Z "$file" | grep -E '^[lbcp]' >/dev/null; then fail "the .mcpb has a member that is not a regular file"; fi
@@ -65,6 +67,7 @@ if unzip -Z "$file" | grep -E '^[lbcp]' >/dev/null; then fail "the .mcpb has a m
 # The members are the committed files, byte for byte, and the packed bundle still starts and answers over stdio.
 unzip -p "$file" manifest.json | cmp -s - mcpb/manifest.json || fail "manifest.json in the .mcpb differs from mcpb/manifest.json"
 unzip -p "$file" icon.png | cmp -s - mcpb/icon.png || fail "icon.png in the .mcpb differs from mcpb/icon.png"
+unzip -p "$file" dist/THIRD_PARTY_NOTICES.txt | cmp -s - dist/THIRD_PARTY_NOTICES.txt || fail "dist/THIRD_PARTY_NOTICES.txt in the .mcpb differs from the committed file"
 unzip -p "$file" dist/mothdex-mcp.mjs >"$work/packed.mjs"
 cmp -s "$work/packed.mjs" dist/mothdex-mcp.mjs || fail "dist/mothdex-mcp.mjs in the .mcpb differs from the committed bundle"
 node scripts/smoke-stdio.mjs "$work/packed.mjs"
