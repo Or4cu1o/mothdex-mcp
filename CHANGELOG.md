@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-23
+
+### Changed
+
+- T-103: the bug report form asks for the component, how it was installed, the version, the system and device and logs, and the issue forms add the `needs-triage` label. `config.yml` keeps blank issues off and links Discussions (Q&A), the private security advisory page and https://mothdex.net. README links to the issue forms and to the beta testing guide.
+- T-99: the marketplace entry is pinned to the v0.1.0 release (`source` github, ref `v0.1.0`, sha `468121cd380081d3e3126a3e59956fd98034510b`). README: install by npm, MCP registry name and the `.mcpb`; no more "nothing is released". `docs/release.md` records the first release (manual first npm and registry publish, the provenance 404, the npm `0.0.0-stage` placeholder) and drops the dormant wording.
+
+### Fixed
+
+- T-103: the bundle embeds only the `name` and `version` of `package.json` (an esbuild plugin in `scripts/build.mjs`), no longer its `scripts` and `devDependencies`; `check:package` fails if they come back. `dist` rebuilt. The icon check exercise gains the height-256 and shorter-than-24-bytes cases.
+
 ## [0.1.0] - 2026-11-22
 
 ### Fixed

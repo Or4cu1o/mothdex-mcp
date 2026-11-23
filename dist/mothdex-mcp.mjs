@@ -22614,7 +22614,7 @@ function toError(value) {
 }
 
 // package.json
-var package_default = { name: "mothdex-mcp", version: "0.1.0" };
+var package_default = { name: "mothdex-mcp", version: "0.1.1" };
 
 // src/api/base-url.ts
 import { isIP } from "node:net";
